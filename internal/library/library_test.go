@@ -181,3 +181,19 @@ func TestScan_EmptyFolder(t *testing.T) {
 		t.Fatalf("got %d items, want 0", len(items))
 	}
 }
+
+func TestEpisodeTitle(t *testing.T) {
+	cases := []struct{ filename, want string }{
+		{"The Office - S01E02 - Diversity Day [1080p WEBDL].mkv", "Diversity Day"},
+		{"The.Office.S01E02.Diversity.Day.1080p.WEB.x264-GROUP.mkv", "Diversity Day"},
+		{"show_s1e2_the_fire_720p.mkv", "the fire"},
+		{"S01E02.mkv", ""}, // nothing after the marker
+		{"the-one-with-the-pilot.mkv", "the one with the pilot"}, // no SxxExx: whole name cleaned
+		{"Movie.Night.2160p.HDR.mkv", "Movie Night"},
+	}
+	for _, c := range cases {
+		if got := EpisodeTitle(c.filename); got != c.want {
+			t.Errorf("EpisodeTitle(%q) = %q, want %q", c.filename, got, c.want)
+		}
+	}
+}

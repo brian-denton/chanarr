@@ -142,3 +142,40 @@ func ParseEpisode(filename string) (season, episode int, ok bool) {
 	}
 	return season, episode, true
 }
+
+// cruftToken matches release-name noise (resolution, source, codec, audio
+// tags). Once one of these tokens appears, it and everything after it is
+// dropped — in scene/Sonarr naming the episode title always precedes the
+// technical tags.
+var cruftToken = regexp.MustCompile(`(?i)^(480p|576p|720p|1080p|2160p|4k|8k|web|web-?dl|webrip|bluray|blu-ray|brrip|bdrip|dvdrip|hdtv|sdtv|hdr|hdr10\+?|dv|dovi|proper|repack|internal|remux|extended|uncut|x264|x265|h\.?264|h\.?265|hevc|avc|xvid|divx|aac(\d\.\d)?|ac3|eac3|dd[p+]?(\d\.\d)?|dts(-?hd)?(-?ma)?|truehd|atmos|opus|flac|mp3|\d+bit|multi|dual(-audio)?|amzn|nf|dsnp|hulu|hmax|max|atvp|pcok|stan)$`)
+
+// EpisodeTitle derives a human-readable episode title from a media
+// filename — the text after the SxxExx marker (Sonarr/scene naming puts
+// the episode title there), with separators normalized and trailing
+// release cruft removed. Filenames without an SxxExx marker get the same
+// cleanup applied to the whole name. Returns "" when nothing readable
+// remains (e.g. "S01E02.mkv") — the caller decides the fallback, since
+// what's honest differs per context (the guide omits its sub-title, the
+// UI shows the raw filename).
+func EpisodeTitle(filename string) string {
+	name := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+	if m := episodePattern.FindStringIndex(name); m != nil {
+		name = name[m[1]:]
+	}
+
+	// Bracketed blocks are always tags ("[1080p WEBDL]", "[rarbg]").
+	if i := strings.IndexAny(name, "[("); i >= 0 {
+		name = name[:i]
+	}
+
+	name = strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(name)
+	var kept []string
+	for _, tok := range strings.Fields(name) {
+		if cruftToken.MatchString(tok) {
+			break
+		}
+		kept = append(kept, tok)
+	}
+	return strings.Join(kept, " ")
+}

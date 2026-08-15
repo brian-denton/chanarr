@@ -44,7 +44,8 @@ type xmltvProgramme struct {
 	Stop            string            `xml:"stop,attr"`
 	Channel         string            `xml:"channel,attr"`
 	Title           xmltvText         `xml:"title"`
-	SubTitle        xmltvText         `xml:"sub-title"`
+	SubTitle        *xmltvText        `xml:"sub-title"`
+	Desc            xmltvText         `xml:"desc"`
 	Category        xmltvText         `xml:"category"`
 	EpisodeNums     []xmltvEpisodeNum `xml:"episode-num,omitempty"`
 	PreviouslyShown *struct{}         `xml:"previously-shown"`
@@ -68,9 +69,14 @@ type xmltvEpisodeNum struct {
 // Per-channel, per-airing fields:
 //   - <title> is always the channel name (one Channel = one show/folder,
 //     per the scheduling model — spec.md §2).
-//   - <sub-title> is always the airing's filename, stripped of its
-//     extension (spec.md §8's filename-fallback rule, applied uniformly:
-//     chanarr has no separate source of clean episode-title text).
+//   - <sub-title> is the episode title cleaned out of the filename
+//     (library.EpisodeTitle: text after the SxxExx marker, separators
+//     normalized, release cruft stripped) — omitted entirely when nothing
+//     readable remains, since a fabricated title is worse than letting the
+//     episode-num speak for itself.
+//   - <desc> is a plain "Show — S01E02 — Episode Title" line built from
+//     whatever parsed, so Plex's details pane isn't empty. chanarr has no
+//     synopsis source in v1 (online metadata deferred, spec.md §13).
 //   - <episode-num> is emitted (both xmltv_ns and onscreen systems) only
 //     when internal/library.ParseEpisode recognizes an SxxExx pattern in
 //     the filename; omitted otherwise — an absent episode number is more
@@ -110,27 +116,33 @@ func BuildXMLTV(channels []ChannelSchedule, now time.Time) ([]byte, error) {
 }
 
 func buildProgramme(ch schedule.Channel, airing schedule.Airing) xmltvProgramme {
+	filename := filepath.Base(airing.Item.Path)
+	episodeTitle := library.EpisodeTitle(filename)
+
 	p := xmltvProgramme{
 		Start:           airing.Start.UTC().Format(timeLayout),
 		Stop:            airing.End.UTC().Format(timeLayout),
 		Channel:         ch.Number,
 		Title:           xmltvText{Lang: "en", Value: ch.Name},
-		SubTitle:        xmltvText{Lang: "en", Value: episodeTitle(airing.Item.Path)},
 		Category:        xmltvText{Lang: "en", Value: "Series"},
 		PreviouslyShown: &struct{}{},
 	}
+	if episodeTitle != "" {
+		p.SubTitle = &xmltvText{Lang: "en", Value: episodeTitle}
+	}
 
-	if season, episode, ok := library.ParseEpisode(filepath.Base(airing.Item.Path)); ok {
+	descParts := []string{ch.Name}
+	if season, episode, ok := library.ParseEpisode(filename); ok {
 		p.EpisodeNums = []xmltvEpisodeNum{
 			{System: "onscreen", Value: fmt.Sprintf("S%02dE%02d", season, episode)},
 			{System: "xmltv_ns", Value: fmt.Sprintf("%d.%d.0/1", season-1, episode-1)},
 		}
+		descParts = append(descParts, fmt.Sprintf("S%02dE%02d", season, episode))
 	}
+	if episodeTitle != "" && episodeTitle != ch.Name {
+		descParts = append(descParts, episodeTitle)
+	}
+	p.Desc = xmltvText{Lang: "en", Value: strings.Join(descParts, " — ")}
 
 	return p
-}
-
-func episodeTitle(path string) string {
-	base := filepath.Base(path)
-	return strings.TrimSuffix(base, filepath.Ext(base))
 }

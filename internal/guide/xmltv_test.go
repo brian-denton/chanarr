@@ -81,8 +81,11 @@ func TestBuildXMLTV_ProgrammeFields(t *testing.T) {
 	if p.Title.Value != "Classic Sitcoms" {
 		t.Errorf("title = %q, want channel name", p.Title.Value)
 	}
-	if p.SubTitle.Value != "the-one-with-the-pilot" {
-		t.Errorf("sub-title = %q, want filename stripped of extension", p.SubTitle.Value)
+	if p.SubTitle == nil || p.SubTitle.Value != "the one with the pilot" {
+		t.Errorf("sub-title = %v, want cleaned filename title", p.SubTitle)
+	}
+	if p.Desc.Value != "Classic Sitcoms — the one with the pilot" {
+		t.Errorf("desc = %q, want channel name — episode title", p.Desc.Value)
 	}
 	if p.Category.Value != "Series" {
 		t.Errorf("category = %q, want %q", p.Category.Value, "Series")
@@ -204,5 +207,66 @@ func TestBuildXMLTV_PropagatesScheduleErrors(t *testing.T) {
 	_, err := BuildXMLTV(channels, now)
 	if err == nil {
 		t.Fatal("expected an error for an empty epoch, got nil")
+	}
+}
+
+func TestBuildXMLTV_EpisodeTitleAndDescFromSonarrStyleFilename(t *testing.T) {
+	now := time.Date(2026, 8, 15, 14, 0, 0, 0, time.UTC)
+	channels := []ChannelSchedule{{
+		Channel: schedule.Channel{Number: "1", Name: "The Office"},
+		Epoch: schedule.Epoch{
+			Start: now,
+			Items: []schedule.PlaylistItem{
+				item("/tv/The Office - S01E02 - Diversity Day [1080p WEBDL].mkv", 24*time.Hour),
+			},
+		},
+	}}
+
+	out, err := BuildXMLTV(channels, now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var doc xmltvDoc
+	if err := xml.Unmarshal(out, &doc); err != nil {
+		t.Fatal(err)
+	}
+	p := doc.Programmes[0]
+	if p.SubTitle == nil || p.SubTitle.Value != "Diversity Day" {
+		t.Errorf("sub-title = %v, want the episode title cleaned out of the filename", p.SubTitle)
+	}
+	if p.Desc.Value != "The Office — S01E02 — Diversity Day" {
+		t.Errorf("desc = %q", p.Desc.Value)
+	}
+	if len(p.EpisodeNums) != 2 {
+		t.Fatalf("episode-nums = %v, want onscreen + xmltv_ns", p.EpisodeNums)
+	}
+}
+
+func TestBuildXMLTV_BareSxxExxFilenameOmitsSubTitle(t *testing.T) {
+	// "S01E02.mkv" yields no readable title — the sub-title is omitted
+	// (the episode-num already tells the story) rather than fabricated.
+	now := time.Date(2026, 8, 15, 14, 0, 0, 0, time.UTC)
+	channels := []ChannelSchedule{{
+		Channel: schedule.Channel{Number: "1", Name: "The Office"},
+		Epoch: schedule.Epoch{
+			Start: now,
+			Items: []schedule.PlaylistItem{item("/tv/S01E02.mkv", 24*time.Hour)},
+		},
+	}}
+
+	out, err := BuildXMLTV(channels, now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var doc xmltvDoc
+	if err := xml.Unmarshal(out, &doc); err != nil {
+		t.Fatal(err)
+	}
+	p := doc.Programmes[0]
+	if p.SubTitle != nil {
+		t.Errorf("sub-title = %v, want omitted", p.SubTitle)
+	}
+	if p.Desc.Value != "The Office — S01E02" {
+		t.Errorf("desc = %q", p.Desc.Value)
 	}
 }

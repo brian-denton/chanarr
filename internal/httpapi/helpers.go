@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	"chanarr/internal/library"
 	"chanarr/internal/netfs"
 	"chanarr/internal/schedule"
 	"chanarr/internal/store"
@@ -84,10 +85,23 @@ func (s *Server) toChannelView(ch schedule.Channel) channelView {
 	return v
 }
 
-// episodeTitle mirrors internal/guide's sub-title rule: the filename,
-// stripped of its extension (spec.md §8's fallback, applied uniformly).
+// episodeTitle mirrors internal/guide's sub-title rule: the episode title
+// cleaned out of the filename (library.EpisodeTitle), with a prefixed
+// SxxExx when one parsed; falls back to the raw filename sans extension
+// when nothing readable remains (spec.md §8's fallback).
 func episodeTitle(path string) string {
 	base := filepath.Base(path)
+	title := library.EpisodeTitle(base)
+	if season, episode, ok := library.ParseEpisode(base); ok {
+		se := fmt.Sprintf("S%02dE%02d", season, episode)
+		if title != "" {
+			return se + " · " + title
+		}
+		return se
+	}
+	if title != "" {
+		return title
+	}
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
