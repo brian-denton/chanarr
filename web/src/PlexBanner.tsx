@@ -100,7 +100,10 @@ export function PlexBanner() {
     return (
       <div className="plex-banner">
         <span>
-          Enter <span className="code">{code}</span> at plex.tv/link&hellip;
+          Enter <span className="code">{code}</span> at{" "}
+          <a href="https://plex.tv/link" target="_blank" rel="noopener noreferrer">
+            plex.tv/link
+          </a>
         </span>
         <button className="dismiss" onClick={dismiss} aria-label="Dismiss">
           &times;

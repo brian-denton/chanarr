@@ -179,6 +179,11 @@ a {
   letter-spacing: 0.05em;
 }
 
+.plex-banner a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .plex-connect-form {
   display: flex;
   gap: 8px;
