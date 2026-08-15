@@ -61,7 +61,10 @@ func plexHeaders(req *http.Request, clientIdentifier string) {
 // StartLink begins a PIN-link attempt via POST /api/v2/pins and returns the
 // code to show the user (they enter it at https://plex.tv/link).
 func StartLink(ctx context.Context, clientIdentifier string) (Pin, error) {
-	body := strings.NewReader(url.Values{"strong": {"true"}}.Encode())
+	// strong=false (the default) is what plex.tv/link expects: a short
+	// 4-character code. strong=true instead returns a long-lived code for
+	// direct API auth, which the /link page's input can't accept.
+	body := strings.NewReader(url.Values{"strong": {"false"}}.Encode())
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBase+"/api/v2/pins", body)
 	if err != nil {
 		return Pin{}, fmt.Errorf("plexlink: build pin request: %w", err)
