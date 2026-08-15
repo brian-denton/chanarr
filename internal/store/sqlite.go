@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS channels (
 	name         TEXT NOT NULL,
 	folder       TEXT NOT NULL,
 	shuffle      INTEGER NOT NULL DEFAULT 0,
-	shuffle_seed INTEGER NOT NULL DEFAULT 0
+	shuffle_seed INTEGER NOT NULL DEFAULT 0,
+	logo         TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS epochs (
@@ -73,7 +74,7 @@ func openSQLite(path string) (*sqliteStore, error) {
 func (s *sqliteStore) Close() error { return s.db.Close() }
 
 func (s *sqliteStore) Channels() ([]schedule.Channel, error) {
-	rows, err := s.db.Query(`SELECT id, number, name, folder, shuffle, shuffle_seed FROM channels ORDER BY number`)
+	rows, err := s.db.Query(`SELECT id, number, name, folder, shuffle, shuffle_seed, logo FROM channels ORDER BY number`)
 	if err != nil {
 		return nil, fmt.Errorf("store: query channels: %w", err)
 	}
@@ -82,7 +83,7 @@ func (s *sqliteStore) Channels() ([]schedule.Channel, error) {
 	var channels []schedule.Channel
 	for rows.Next() {
 		var ch schedule.Channel
-		if err := rows.Scan(&ch.ID, &ch.Number, &ch.Name, &ch.Folder, &ch.Shuffle, &ch.ShuffleSeed); err != nil {
+		if err := rows.Scan(&ch.ID, &ch.Number, &ch.Name, &ch.Folder, &ch.Shuffle, &ch.ShuffleSeed, &ch.Logo); err != nil {
 			return nil, fmt.Errorf("store: scan channel: %w", err)
 		}
 		channels = append(channels, ch)
@@ -90,11 +91,25 @@ func (s *sqliteStore) Channels() ([]schedule.Channel, error) {
 	return channels, rows.Err()
 }
 
+func (s *sqliteStore) Channel(id int64) (schedule.Channel, error) {
+	var ch schedule.Channel
+	err := s.db.QueryRow(
+		`SELECT id, number, name, folder, shuffle, shuffle_seed, logo FROM channels WHERE id = ?`, id,
+	).Scan(&ch.ID, &ch.Number, &ch.Name, &ch.Folder, &ch.Shuffle, &ch.ShuffleSeed, &ch.Logo)
+	if errors.Is(err, sql.ErrNoRows) {
+		return schedule.Channel{}, ErrNotFound
+	}
+	if err != nil {
+		return schedule.Channel{}, fmt.Errorf("store: query channel %d: %w", id, err)
+	}
+	return ch, nil
+}
+
 func (s *sqliteStore) SaveChannel(ch schedule.Channel) (schedule.Channel, error) {
 	if ch.ID == 0 {
 		res, err := s.db.Exec(
-			`INSERT INTO channels (number, name, folder, shuffle, shuffle_seed) VALUES (?, ?, ?, ?, ?)`,
-			ch.Number, ch.Name, ch.Folder, ch.Shuffle, ch.ShuffleSeed,
+			`INSERT INTO channels (number, name, folder, shuffle, shuffle_seed, logo) VALUES (?, ?, ?, ?, ?, ?)`,
+			ch.Number, ch.Name, ch.Folder, ch.Shuffle, ch.ShuffleSeed, ch.Logo,
 		)
 		if err != nil {
 			return schedule.Channel{}, fmt.Errorf("store: insert channel: %w", err)
@@ -108,8 +123,8 @@ func (s *sqliteStore) SaveChannel(ch schedule.Channel) (schedule.Channel, error)
 	}
 
 	res, err := s.db.Exec(
-		`UPDATE channels SET number = ?, name = ?, folder = ?, shuffle = ?, shuffle_seed = ? WHERE id = ?`,
-		ch.Number, ch.Name, ch.Folder, ch.Shuffle, ch.ShuffleSeed, ch.ID,
+		`UPDATE channels SET number = ?, name = ?, folder = ?, shuffle = ?, shuffle_seed = ?, logo = ? WHERE id = ?`,
+		ch.Number, ch.Name, ch.Folder, ch.Shuffle, ch.ShuffleSeed, ch.Logo, ch.ID,
 	)
 	if err != nil {
 		return schedule.Channel{}, fmt.Errorf("store: update channel: %w", err)
@@ -241,10 +256,12 @@ func (s *sqliteStore) setSetting(key, value string) error {
 	return nil
 }
 
-const settingDeviceID = "device_id"
-
-func (s *sqliteStore) DeviceID() (string, error) {
-	if id, ok, err := s.setting(settingDeviceID); err != nil {
+// getOrCreateID returns the persisted value for key, generating and saving
+// a fresh random one (prefixed, hex-encoded) on first call. The single open
+// connection (SetMaxOpenConns(1) in openSQLite) fully serializes concurrent
+// callers, so this needs no extra locking of its own.
+func (s *sqliteStore) getOrCreateID(key, prefix string) (string, error) {
+	if id, ok, err := s.setting(key); err != nil {
 		return "", err
 	} else if ok {
 		return id, nil
@@ -252,21 +269,30 @@ func (s *sqliteStore) DeviceID() (string, error) {
 
 	buf := make([]byte, 8)
 	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("store: generate device id: %w", err)
+		return "", fmt.Errorf("store: generate %s: %w", key, err)
 	}
-	id := "chanarr-" + hex.EncodeToString(buf)
+	id := prefix + hex.EncodeToString(buf)
 
-	// The single open connection (SetMaxOpenConns(1) in openSQLite) fully
-	// serializes concurrent callers, so this get-or-create needs no extra
-	// locking of its own.
-	if err := s.setSetting(settingDeviceID, id); err != nil {
+	if err := s.setSetting(key, id); err != nil {
 		return "", err
 	}
-	final, _, err := s.setting(settingDeviceID)
+	final, _, err := s.setting(key)
 	if err != nil {
 		return "", err
 	}
 	return final, nil
+}
+
+const settingDeviceID = "device_id"
+
+func (s *sqliteStore) DeviceID() (string, error) {
+	return s.getOrCreateID(settingDeviceID, "chanarr-")
+}
+
+const settingPlexClientID = "plex_client_identifier"
+
+func (s *sqliteStore) PlexClientIdentifier() (string, error) {
+	return s.getOrCreateID(settingPlexClientID, "")
 }
 
 const (

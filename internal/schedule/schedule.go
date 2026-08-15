@@ -16,6 +16,10 @@ type Channel struct {
 	Folder      string
 	Shuffle     bool
 	ShuffleSeed int64
+	// Logo is a filesystem path to the channel's logo image, empty if none
+	// is set. Auto-detected from a convention file or uploaded by the user
+	// (spec.md §8); internal/httpapi owns writing this field.
+	Logo string
 }
 
 // Epoch is an immutable, timestamped snapshot of a Channel's playlist —

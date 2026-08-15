@@ -13,6 +13,8 @@ import "chanarr/internal/schedule"
 // Store is the persistence boundary the rest of chanarr depends on.
 type Store interface {
 	Channels() ([]schedule.Channel, error)
+	// Channel returns a single channel by ID, or ErrNotFound.
+	Channel(id int64) (schedule.Channel, error)
 	// SaveChannel inserts a new channel when ch.ID == 0, or updates the
 	// existing row otherwise. Returns ErrNotFound if ch.ID is set but no
 	// such channel exists.
@@ -30,6 +32,13 @@ type Store interface {
 	// DeviceID returns chanarr's stable HDHomeRun DeviceID (internal/tuner),
 	// generating and persisting one on first call.
 	DeviceID() (string, error)
+
+	// PlexClientIdentifier returns the stable identifier chanarr presents
+	// to plex.tv's PIN-link flow (internal/plexlink), generating and
+	// persisting one on first call. Deliberately distinct from DeviceID —
+	// they identify chanarr to two different Plex systems (the local PMS's
+	// tuner discovery vs. plex.tv's account-linking identity).
+	PlexClientIdentifier() (string, error)
 
 	// PlexConnection reports the optional Plex connection (docs/adr/0002).
 	// connected is false, with empty strings, until SavePlexConnection has

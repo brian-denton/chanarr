@@ -34,19 +34,44 @@ func main() {
 	// store-generated deviceID into DiscoverHandler/DeviceXMLHandler
 	// (mirroring LineupHandler's provider pattern) as a follow-up.
 
-	// TODO: replace with db-backed lineup/guide providers once
-	// internal/httpapi exposes channel CRUD against internal/store.
-	emptyLineup := func() []tuner.LineupEntry { return nil }
-	emptyGuide := func() ([]guide.ChannelSchedule, error) { return nil, nil }
+	lineupProvider := func() []tuner.LineupEntry {
+		channels, err := db.Channels()
+		if err != nil {
+			log.Println("lineup: ", err)
+			return nil
+		}
+		entries := make([]tuner.LineupEntry, len(channels))
+		for i, c := range channels {
+			entries[i] = tuner.LineupEntry{GuideNumber: c.Number, GuideName: c.Name}
+		}
+		return entries
+	}
+	guideProvider := func() ([]guide.ChannelSchedule, error) {
+		channels, err := db.Channels()
+		if err != nil {
+			return nil, err
+		}
+		out := make([]guide.ChannelSchedule, 0, len(channels))
+		for _, c := range channels {
+			epoch, err := db.CurrentEpoch(c.ID)
+			if err != nil {
+				continue // no epoch yet (e.g. an empty folder) — omit from the guide
+			}
+			out = append(out, guide.ChannelSchedule{Channel: c, Epoch: epoch})
+		}
+		return out, nil
+	}
+
+	api := httpapi.NewServer(db, cfg.LogosDir)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/discover.json", tuner.DiscoverHandler)
-	mux.HandleFunc("/lineup.json", tuner.LineupHandler(emptyLineup))
+	mux.HandleFunc("/lineup.json", tuner.LineupHandler(lineupProvider))
 	mux.HandleFunc("/lineup_status.json", tuner.LineupStatusHandler)
 	mux.HandleFunc("/device.xml", tuner.DeviceXMLHandler)
-	mux.HandleFunc("/epg.xml", guide.Handler(emptyGuide))
+	mux.HandleFunc("/epg.xml", guide.Handler(guideProvider))
 	mux.HandleFunc("/stream/", stream.Handler)
-	mux.Handle("/api/", httpapi.Mux())
+	mux.Handle("/api/", api.Mux())
 	// TODO: serve the embedded React build (web/dist) for everything else.
 
 	log.Println("chanarr listening on", cfg.ListenAddr)

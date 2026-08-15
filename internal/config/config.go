@@ -28,6 +28,8 @@ func (e errMissingFFmpeg) Error() string {
 type Config struct {
 	ListenAddr string
 	DBPath     string
+	// LogosDir is where internal/httpapi stores uploaded channel logos.
+	LogosDir string
 }
 
 // Load builds a Config from flags/environment. TODO: implement.
@@ -35,5 +37,6 @@ func Load() Config {
 	return Config{
 		ListenAddr: ":5004",
 		DBPath:     "chanarr.db",
+		LogosDir:   "logos",
 	}
 }

@@ -1,0 +1,206 @@
+package httpapi
+
+import (
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"chanarr/internal/library"
+	"chanarr/internal/schedule"
+)
+
+func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
+	channels, err := s.store.Channels()
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	views := make([]channelView, len(channels))
+	for i, ch := range channels {
+		views[i] = s.toChannelView(ch)
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
+type createChannelRequest struct {
+	Number      string `json:"number"`
+	Name        string `json:"name"`
+	Folder      string `json:"folder"`
+	Shuffle     bool   `json:"shuffle"`
+	ShuffleSeed int64  `json:"shuffleSeed"`
+}
+
+func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
+	var req createChannelRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Number == "" || req.Name == "" || req.Folder == "" {
+		writeError(w, http.StatusBadRequest, "number, name, and folder are required")
+		return
+	}
+
+	items, err := library.Scan(req.Folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if req.Shuffle && req.ShuffleSeed == 0 {
+		seed, err := randomSeed()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		req.ShuffleSeed = seed
+	}
+
+	ch := schedule.Channel{
+		Number: req.Number, Name: req.Name, Folder: req.Folder,
+		Shuffle: req.Shuffle, ShuffleSeed: req.ShuffleSeed,
+	}
+	if logoPath, ok := library.DetectLogo(req.Folder); ok {
+		ch.Logo = logoPath
+	}
+
+	ch, err = s.store.SaveChannel(ch)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	ordered := applyShuffle(items, ch.Shuffle, ch.ShuffleSeed)
+	if _, err := s.store.SaveEpoch(schedule.Epoch{ChannelID: ch.ID, Start: time.Now(), Items: ordered}); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, s.toChannelView(ch))
+}
+
+type updateChannelRequest struct {
+	Number      string `json:"number"`
+	Name        string `json:"name"`
+	Shuffle     bool   `json:"shuffle"`
+	ShuffleSeed int64  `json:"shuffleSeed"`
+}
+
+// handleUpdateChannel edits name/number/shuffle — not folder, which isn't
+// part of the accepted UI's edit panel and would amount to recreating the
+// channel rather than editing it.
+func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid channel id")
+		return
+	}
+	var req updateChannelRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Number == "" || req.Name == "" {
+		writeError(w, http.StatusBadRequest, "number and name are required")
+		return
+	}
+
+	existing, err := s.store.Channel(id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	// Ticket 08: any shuffle-toggle or seed-change stamps a new epoch,
+	// uniformly — plain name/number edits don't touch scheduling at all.
+	shuffleChanged := existing.Shuffle != req.Shuffle || existing.ShuffleSeed != req.ShuffleSeed
+
+	existing.Number, existing.Name = req.Number, req.Name
+	existing.Shuffle, existing.ShuffleSeed = req.Shuffle, req.ShuffleSeed
+	updated, err := s.store.SaveChannel(existing)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	if shuffleChanged {
+		items, err := library.Scan(updated.Folder)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		ordered := applyShuffle(items, updated.Shuffle, updated.ShuffleSeed)
+		if _, err := s.store.SaveEpoch(schedule.Epoch{ChannelID: updated.ID, Start: time.Now(), Items: ordered}); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, s.toChannelView(updated))
+}
+
+func (s *Server) handleDeleteChannel(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid channel id")
+		return
+	}
+
+	// Best-effort cleanup of an uploaded (chanarr-owned) logo file — never
+	// touch a path outside logosDir, since an auto-detected logo lives in
+	// the user's own media folder.
+	if ch, err := s.store.Channel(id); err == nil && ch.Logo != "" && strings.HasPrefix(ch.Logo, s.logosDir) {
+		os.Remove(ch.Logo)
+	}
+
+	if err := s.store.DeleteChannel(id); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type rescanResponse struct {
+	Changed      bool `json:"changed"`
+	EpisodeCount int  `json:"episodeCount"`
+}
+
+// handleRescanChannel is the manual "rescan now" action (spec.md §3); the
+// periodic 5-minute timer that also calls this same path is wired above
+// this package (TODO, not yet implemented — see internal/library's doc
+// comment).
+func (s *Server) handleRescanChannel(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid channel id")
+		return
+	}
+	ch, err := s.store.Channel(id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	items, err := library.Scan(ch.Folder)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var current schedule.Epoch
+	if e, err := s.store.CurrentEpoch(id); err == nil {
+		current = e
+	}
+
+	changed := !itemsEqualAsSet(items, current.Items)
+	if changed {
+		ordered := applyShuffle(items, ch.Shuffle, ch.ShuffleSeed)
+		if _, err := s.store.SaveEpoch(schedule.Epoch{ChannelID: id, Start: time.Now(), Items: ordered}); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, rescanResponse{Changed: changed, EpisodeCount: len(items)})
+}

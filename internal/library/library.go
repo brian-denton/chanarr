@@ -13,15 +13,15 @@
 // non-shuffle channels is lexical path/filename sort — Scan always returns
 // items in that order; applying a channel's shuffle on top (spec.md §2:
 // "shuffle fixed per epoch") is the epoch-creation step's job, not Scan's.
-// Channel logo: auto-detect poster.jpg/folder.jpg in the folder, with
-// manual upload as an override (internal/httpapi) — TODO, not implemented
-// here.
+// Channel logo: auto-detect poster.jpg/folder.jpg in the folder via
+// DetectLogo, with manual upload as an override (internal/httpapi).
 package library
 
 import (
 	"fmt"
 	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -78,6 +78,37 @@ func Scan(folder string) ([]schedule.PlaylistItem, error) {
 		items = append(items, schedule.PlaylistItem{Path: path, Duration: duration})
 	}
 	return items, nil
+}
+
+// logoCandidates are the conventional filenames Sonarr/Plex-managed
+// libraries already tend to have, checked case-insensitively at the
+// folder's top level only (spec.md §8 — this is a show-root convention,
+// not something to hunt for recursively).
+var logoCandidates = []string{
+	"poster.jpg", "poster.jpeg", "poster.png",
+	"folder.jpg", "folder.jpeg", "folder.png",
+}
+
+// DetectLogo looks for a conventional logo/poster file directly in folder.
+// ok=false means none was found — the caller (internal/httpapi) falls back
+// to no logo unless the user uploads one.
+func DetectLogo(folder string) (path string, ok bool) {
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		return "", false
+	}
+	names := make(map[string]string, len(entries)) // lowercase -> actual
+	for _, e := range entries {
+		if !e.IsDir() {
+			names[strings.ToLower(e.Name())] = e.Name()
+		}
+	}
+	for _, candidate := range logoCandidates {
+		if actual, found := names[candidate]; found {
+			return filepath.Join(folder, actual), true
+		}
+	}
+	return "", false
 }
 
 // episodePattern matches the Sonarr/Plex SxxExx naming convention, e.g.

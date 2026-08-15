@@ -48,6 +48,29 @@ func TestSaveChannel_InsertAssignsID(t *testing.T) {
 	}
 }
 
+func TestChannel_ByID(t *testing.T) {
+	s := openTestStore(t)
+	created, err := s.SaveChannel(schedule.Channel{Number: "1", Name: "X", Folder: "/a"})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	got, err := s.Channel(created.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Name != "X" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestChannel_NotFound(t *testing.T) {
+	s := openTestStore(t)
+	_, err := s.Channel(999)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("got err %v, want ErrNotFound", err)
+	}
+}
+
 func TestSaveChannel_UpdateExisting(t *testing.T) {
 	s := openTestStore(t)
 	ch, err := s.SaveChannel(schedule.Channel{Number: "1", Name: "Old Name", Folder: "/a"})
@@ -218,6 +241,65 @@ func TestSaveEpoch_NeverUpdatesPriorEpoch(t *testing.T) {
 	}
 	if current.ID != second.ID {
 		t.Errorf("CurrentEpoch returned %d, want the most recent epoch %d", current.ID, second.ID)
+	}
+}
+
+func TestSaveChannel_LogoRoundTrips(t *testing.T) {
+	s := openTestStore(t)
+	ch, err := s.SaveChannel(schedule.Channel{Number: "1", Name: "X", Folder: "/a", Logo: "/logos/1.png"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	channels, err := s.Channels()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(channels) != 1 || channels[0].Logo != "/logos/1.png" {
+		t.Fatalf("got %+v, want Logo=/logos/1.png", channels)
+	}
+
+	ch.Logo = "/logos/1-updated.png"
+	if _, err := s.SaveChannel(ch); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	channels, _ = s.Channels()
+	if channels[0].Logo != "/logos/1-updated.png" {
+		t.Fatalf("got Logo=%q, want /logos/1-updated.png", channels[0].Logo)
+	}
+}
+
+func TestPlexClientIdentifier_StableAcrossCalls(t *testing.T) {
+	s := openTestStore(t)
+	id1, err := s.PlexClientIdentifier()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id1 == "" {
+		t.Fatal("expected a non-empty identifier")
+	}
+	id2, err := s.PlexClientIdentifier()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id1 != id2 {
+		t.Fatalf("PlexClientIdentifier changed across calls: %q vs %q", id1, id2)
+	}
+}
+
+func TestPlexClientIdentifier_DistinctFromDeviceID(t *testing.T) {
+	// They identify chanarr to two different Plex systems and must never
+	// collide, even though both happen to use the same generation scheme.
+	s := openTestStore(t)
+	deviceID, err := s.DeviceID()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	clientID, err := s.PlexClientIdentifier()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if deviceID == clientID {
+		t.Fatalf("DeviceID and PlexClientIdentifier collided: %q", deviceID)
 	}
 }
 

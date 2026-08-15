@@ -111,6 +111,47 @@ func TestScan_SkipsFilesThatFailToProbe(t *testing.T) {
 	}
 }
 
+func TestDetectLogo_Found(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, filepath.Join(dir, "Poster.JPG")) // case-insensitive match
+	mustWriteFile(t, filepath.Join(dir, "S01E01.mkv"))
+
+	path, ok := DetectLogo(dir)
+	if !ok {
+		t.Fatal("expected DetectLogo to find Poster.JPG")
+	}
+	if path != filepath.Join(dir, "Poster.JPG") {
+		t.Errorf("got %q, want %q", path, filepath.Join(dir, "Poster.JPG"))
+	}
+}
+
+func TestDetectLogo_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, filepath.Join(dir, "S01E01.mkv"))
+
+	_, ok := DetectLogo(dir)
+	if ok {
+		t.Fatal("expected DetectLogo to find nothing")
+	}
+}
+
+func TestDetectLogo_IgnoresSubdirectories(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, filepath.Join(dir, "Season 1", "poster.jpg")) // not top-level
+
+	_, ok := DetectLogo(dir)
+	if ok {
+		t.Fatal("expected DetectLogo to ignore a poster.jpg nested in a subfolder")
+	}
+}
+
+func TestDetectLogo_MissingFolder(t *testing.T) {
+	_, ok := DetectLogo("/no/such/folder/chanarr-test")
+	if ok {
+		t.Fatal("expected ok=false for a missing folder")
+	}
+}
+
 func TestScan_MissingFolder(t *testing.T) {
 	_, err := Scan("/no/such/folder/chanarr-test")
 	if err == nil {
