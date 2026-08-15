@@ -48,15 +48,54 @@ type Airing struct {
 	End   time.Time
 }
 
-// ProgramAt evaluates what airs on a channel at instant t, within the
-// given epoch. The XMLTV guide writer builds a range by calling this
-// repeatedly, walking t forward to each Airing's End until its horizon is
-// covered — see spec.md §5. Not yet implemented: cycle-length math over
-// epoch.Items, including filler-padding for items whose expected duration
-// couldn't be honored at playback time (spec.md §2).
+// ProgramAt evaluates what airs on a channel at instant t, within the given
+// epoch. The XMLTV guide writer builds a range by calling this repeatedly,
+// walking t forward to each Airing's End until its horizon is covered — see
+// spec.md §5.
+//
+// epoch.Items is assumed to already be in final playback order (shuffled at
+// epoch-creation time if the channel has shuffle on — see spec.md §2's
+// "shuffle fixed per epoch" decision); ProgramAt itself never reorders.
+//
+// Runtime playback failures (a file missing, ffmpeg erroring) are handled
+// by internal/stream substituting filler content that still occupies the
+// item's cached Duration — not by ProgramAt — which is what keeps every
+// future Airing's boundaries stable regardless of what actually played.
 func ProgramAt(epoch Epoch, t time.Time) (Airing, error) {
-	// TODO: compute position-in-cycle as (t - epoch.Start) mod cycleLength,
-	// walk epoch.Items (in epoch-stamped shuffle order if applicable) to the
-	// item covering that offset.
-	return Airing{}, errNotImplemented
+	if len(epoch.Items) == 0 {
+		return Airing{}, ErrEmptyEpoch
+	}
+	if t.Before(epoch.Start) {
+		return Airing{}, ErrBeforeEpochStart
+	}
+
+	var cycleLength time.Duration
+	for _, item := range epoch.Items {
+		cycleLength += item.Duration
+	}
+	if cycleLength <= 0 {
+		return Airing{}, ErrZeroCycleLength
+	}
+
+	elapsed := t.Sub(epoch.Start)
+	cycleIndex := elapsed / cycleLength
+	cycleStart := epoch.Start.Add(cycleIndex * cycleLength)
+	pos := elapsed - cycleIndex*cycleLength
+
+	var cum time.Duration
+	for _, item := range epoch.Items {
+		if pos < cum+item.Duration {
+			return Airing{
+				Item:  item,
+				Start: cycleStart.Add(cum),
+				End:   cycleStart.Add(cum + item.Duration),
+			}, nil
+		}
+		cum += item.Duration
+	}
+
+	// Unreachable: pos < cycleLength by construction (elapsed - cycleIndex*
+	// cycleLength is always in [0, cycleLength)), and the loop above covers
+	// exactly [0, cycleLength) across all items.
+	return Airing{}, ErrZeroCycleLength
 }
