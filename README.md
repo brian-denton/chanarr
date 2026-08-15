@@ -6,7 +6,7 @@ Full spec: [.scratch/chanarr-spec/spec.md](.scratch/chanarr-spec/spec.md). Domai
 
 ## Status
 
-Scaffolded, not yet implemented. Package layout mirrors the spec's sections (see doc comments in each `internal/*` package for what belongs there and what's still TODO). The HDHomeRun tuner-discovery endpoints (`internal/tuner`) are already wired up and match the behavior proven against a real Plex server in the walking-skeleton prototype.
+v1 complete: backend and frontend both implemented and wired together, verified end to end (create a channel through the UI, it streams real video to a tuner client).
 
 ## Requirements
 
@@ -26,11 +26,14 @@ internal/library/  folder scanning, SxxExx metadata parsing
 internal/store/    SQLite persistence
 internal/plexlink/ optional PIN-link Plex connection (docs/adr/0002)
 internal/httpapi/  REST API for the web UI
+internal/webui/    embeds the built frontend into the Go binary
 internal/config/   startup config, ffmpeg presence check
 web/               React + TypeScript UI (Vite)
 ```
 
-## Run
+## Develop
+
+Two dev servers, run separately — Vite proxies `/api` to the Go server (`web/vite.config.ts`):
 
 ```bash
 go run ./cmd/chanarr
@@ -38,4 +41,14 @@ go run ./cmd/chanarr
 
 ```bash
 cd web && npm install && npm run dev
+```
+
+## Build a single binary
+
+The frontend build output is embedded into the Go binary (`internal/webui`), so build the frontend first:
+
+```bash
+cd web && npm install && npm run build
+cd .. && go build -o chanarr ./cmd/chanarr
+./chanarr
 ```

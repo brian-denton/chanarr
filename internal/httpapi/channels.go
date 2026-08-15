@@ -28,7 +28,7 @@ type createChannelRequest struct {
 	Name        string `json:"name"`
 	Folder      string `json:"folder"`
 	Shuffle     bool   `json:"shuffle"`
-	ShuffleSeed int64  `json:"shuffleSeed"`
+	ShuffleSeed int64  `json:"shuffleSeed,string"` // full int64 range, kept precise across JS's float64 JSON numbers
 }
 
 func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ type updateChannelRequest struct {
 	Number      string `json:"number"`
 	Name        string `json:"name"`
 	Shuffle     bool   `json:"shuffle"`
-	ShuffleSeed int64  `json:"shuffleSeed"`
+	ShuffleSeed int64  `json:"shuffleSeed,string"` // full int64 range, kept precise across JS's float64 JSON numbers
 }
 
 // handleUpdateChannel edits name/number/shuffle — not folder, which isn't
@@ -110,6 +110,18 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeStoreError(w, err)
 		return
+	}
+
+	// Mirrors handleCreateChannel: turning shuffle on with no seed set gets
+	// a fresh random one, so enabling shuffle via an edit doesn't
+	// deterministically land every such channel on seed 0.
+	if req.Shuffle && req.ShuffleSeed == 0 {
+		seed, err := randomSeed()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		req.ShuffleSeed = seed
 	}
 
 	// Ticket 08: any shuffle-toggle or seed-change stamps a new epoch,

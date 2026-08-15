@@ -58,7 +58,7 @@ type channelView struct {
 	Name         string `json:"name"`
 	Folder       string `json:"folder"`
 	Shuffle      bool   `json:"shuffle"`
-	ShuffleSeed  int64  `json:"shuffleSeed"`
+	ShuffleSeed  int64  `json:"shuffleSeed,string"` // full int64 range, kept precise across JS's float64 JSON numbers
 	HasLogo      bool   `json:"hasLogo"`
 	EpisodeCount int    `json:"episodeCount"`
 	NowPlaying   string `json:"nowPlaying,omitempty"`

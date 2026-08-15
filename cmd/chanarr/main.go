@@ -13,6 +13,7 @@ import (
 	"chanarr/internal/store"
 	"chanarr/internal/stream"
 	"chanarr/internal/tuner"
+	"chanarr/internal/webui"
 )
 
 func main() {
@@ -84,7 +85,12 @@ func main() {
 	mux.HandleFunc("/epg.xml", guide.Handler(guideProvider))
 	mux.HandleFunc("/stream/{number}", stream.Handler(streamProvider))
 	mux.Handle("/api/", api.Mux())
-	// TODO: serve the embedded React build (web/dist) for everything else.
+
+	ui, err := webui.Handler()
+	if err != nil {
+		log.Fatal(err)
+	}
+	mux.Handle("/", ui)
 
 	log.Println("chanarr listening on", cfg.ListenAddr)
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, mux))

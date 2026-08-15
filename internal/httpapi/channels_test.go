@@ -62,6 +62,32 @@ func TestHandleCreateChannel_AutoAssignsShuffleSeedWhenShuffled(t *testing.T) {
 	}
 }
 
+func TestHandleCreateChannel_ShuffleSeedSerializedAsJSONStringForFullInt64Precision(t *testing.T) {
+	// randomSeed() draws from the full int64 range (crypto/rand over 8
+	// bytes), which routinely exceeds 2^53 — the largest integer a JS
+	// float64 (and therefore any JSON number) can represent exactly. A
+	// bare JSON number would get silently rounded by any JS client,
+	// corrupting the seed on the very first round-trip. Encoding it as a
+	// JSON string (`,string` tag) is what avoids that.
+	s := newTestServer(t)
+	dir := newMediaFolder(t, "ep1.mkv")
+
+	rec, req := newJSONRequest("POST", "/api/channels",
+		fmt.Sprintf(`{"number":"1","name":"X","folder":%q,"shuffle":true}`, dir))
+	s.Mux().ServeHTTP(rec, req)
+	if rec.Code != 201 {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if _, isString := raw["shuffleSeed"].(string); !isString {
+		t.Fatalf("shuffleSeed = %#v (%T), want a JSON string", raw["shuffleSeed"], raw["shuffleSeed"])
+	}
+}
+
 // requireFFmpeg gates the tests below that need library.Scan to actually
 // produce non-empty, probeable items — same portability guard as
 // internal/library's own tests.
@@ -110,7 +136,7 @@ func TestHandleUpdateChannel_NameAndNumber(t *testing.T) {
 	created := createChannel(t, s, dir, "1", "Old Name", false)
 
 	rec, req := newJSONRequest("PUT", fmt.Sprintf("/api/channels/%d", created.ID),
-		`{"number":"2","name":"New Name","shuffle":false,"shuffleSeed":0}`)
+		`{"number":"2","name":"New Name","shuffle":false,"shuffleSeed":"0"}`)
 	s.Mux().ServeHTTP(rec, req)
 	if rec.Code != 200 {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
@@ -136,7 +162,7 @@ func TestHandleUpdateChannel_ShuffleToggleStampsNewEpoch(t *testing.T) {
 	}
 
 	rec, req := newJSONRequest("PUT", fmt.Sprintf("/api/channels/%d", created.ID),
-		`{"number":"1","name":"X","shuffle":true,"shuffleSeed":42}`)
+		`{"number":"1","name":"X","shuffle":true,"shuffleSeed":"42"}`)
 	s.Mux().ServeHTTP(rec, req)
 	if rec.Code != 200 {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
@@ -148,6 +174,30 @@ func TestHandleUpdateChannel_ShuffleToggleStampsNewEpoch(t *testing.T) {
 	}
 	if after.ID == before.ID {
 		t.Error("expected a new epoch to be stamped after toggling shuffle on")
+	}
+}
+
+func TestHandleUpdateChannel_EnablingShuffleWithZeroSeedGetsAFreshOne(t *testing.T) {
+	// Mirrors handleCreateChannel's auto-generation — without it, every
+	// channel that gets shuffle turned on via an edit (rather than at
+	// creation) would deterministically land on seed 0.
+	s := newTestServer(t)
+	dir := newMediaFolder(t, "ep1.mkv")
+	created := createChannel(t, s, dir, "1", "X", false)
+	if created.ShuffleSeed != 0 {
+		t.Fatalf("test fixture bug: expected a fresh non-shuffled channel to start at seed 0, got %d", created.ShuffleSeed)
+	}
+
+	rec, req := newJSONRequest("PUT", fmt.Sprintf("/api/channels/%d", created.ID),
+		`{"number":"1","name":"X","shuffle":true,"shuffleSeed":"0"}`)
+	s.Mux().ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var updated channelView
+	json.Unmarshal(rec.Body.Bytes(), &updated)
+	if updated.ShuffleSeed == 0 {
+		t.Error("expected a freshly generated non-zero seed, got 0")
 	}
 }
 
@@ -164,7 +214,7 @@ func TestHandleUpdateChannel_PlainEditDoesNotStampNewEpoch(t *testing.T) {
 	}
 
 	rec, req := newJSONRequest("PUT", fmt.Sprintf("/api/channels/%d", created.ID),
-		`{"number":"1","name":"Renamed","shuffle":false,"shuffleSeed":0}`)
+		`{"number":"1","name":"Renamed","shuffle":false,"shuffleSeed":"0"}`)
 	s.Mux().ServeHTTP(rec, req)
 	if rec.Code != 200 {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
