@@ -1,0 +1,21 @@
+# Go
+/chanarr
+/chanarr-proto
+*.test
+
+# SQLite
+*.db
+*.db-journal
+
+# Node / Vite
+web/node_modules/
+web/dist/
+
+# Misc
+.DS_Store
+
+# Walking-skeleton prototype: generated test clips, compiled binary, run log
+# (regenerate via .scratch/chanarr-spec/assets/walking-skeleton/README.md)
+.scratch/chanarr-spec/assets/walking-skeleton/*.ts
+.scratch/chanarr-spec/assets/walking-skeleton/chanarr-proto
+.scratch/chanarr-spec/assets/walking-skeleton/server.log

@@ -1,0 +1,589 @@
+<!--
+  PROTOTYPE — throwaway, answers ticket 10 (UI.md sub-shape B: no existing app
+  to embed variants in yet, so this is a standalone throwaway page).
+  Three radically different structural takes on chanarr's management UI:
+  onboarding (folder -> channel, no Plex creds needed), channel dashboard,
+  channel edit (name/number/logo/shuffle), and the optional non-blocking
+  "connect Plex" prompt (PIN-link flow). Switch variants with the bottom bar
+  or ?variant=A|B|C in the URL. Just open this file in a browser — no build.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>chanarr UI prototype</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f26; --panel2: #23272f; --border: #2f333c;
+    --text: #e8eaed; --text-dim: #9aa0ab; --accent: #5b8cff; --accent2: #7ee0a8;
+    --danger: #ff6b6b; --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); }
+  button { font: inherit; cursor: pointer; }
+  input[type=text] { font: inherit; }
+  h1, h2, h3, p { margin: 0; }
+  .hidden { display: none !important; }
+
+  /* ---------- Prototype switcher (shared) ---------- */
+  #switcher { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: #000; color: #fff; border-radius: 999px; padding: 6px 6px 6px 14px;
+    display: flex; align-items: center; gap: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    z-index: 9999; font-size: 13px; border: 1px solid #444; }
+  #switcher button { background: #2a2a2a; color: #fff; border: none; border-radius: 999px;
+    width: 28px; height: 28px; font-size: 15px; }
+  #switcher button:hover { background: #3a3a3a; }
+  #switcher .label { min-width: 220px; text-align: center; }
+  #switcher .label b { color: var(--accent2); }
+
+  /* ==================================================================
+     VARIANT A — Wizard-first: full-screen step flow for onboarding,
+     minimal single-column list afterward. "One thing at a time."
+     ================================================================== */
+  .variantA { min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 48px 20px 100px; }
+  .variantA .wrap { width: 100%; max-width: 560px; }
+  .variantA .topbar { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 28px; }
+  .variantA .brand { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+  .variantA .brand span { color: var(--accent); }
+  .variantA .plex-banner { background: var(--panel2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 16px; display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 20px; font-size: 13px; color: var(--text-dim); }
+  .variantA .plex-banner button { background: none; border: 1px solid var(--accent); color: var(--accent);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px; }
+  .variantA .step { background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 32px; text-align: center; }
+  .variantA .step .icon { font-size: 40px; margin-bottom: 12px; }
+  .variantA .step h2 { font-size: 22px; margin-bottom: 8px; }
+  .variantA .step p { color: var(--text-dim); font-size: 14px; margin-bottom: 22px; line-height: 1.5; }
+  .variantA .step input[type=text] { width: 100%; padding: 12px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel2); color: var(--text); margin-bottom: 14px; }
+  .variantA .cta { background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 12px 22px; font-size: 15px; font-weight: 600; width: 100%; }
+  .variantA .cta:disabled { opacity: .4; cursor: default; }
+  .variantA .ghost { background: none; border: none; color: var(--text-dim); font-size: 13px;
+    margin-top: 12px; text-decoration: underline; }
+  .variantA .scan-result { background: var(--panel2); border-radius: 8px; padding: 14px;
+    text-align: left; font-size: 13px; color: var(--text-dim); margin-bottom: 14px; }
+  .variantA .scan-result b { color: var(--text); }
+  .variantA .channel-list { width: 100%; margin-top: 8px; }
+  .variantA .channel-row { background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 14px;
+    margin-bottom: 10px; cursor: pointer; }
+  .variantA .channel-row:hover { border-color: var(--accent); }
+  .variantA .channel-row .num { background: var(--panel2); border-radius: 6px; padding: 4px 8px;
+    font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .variantA .channel-row .emoji { font-size: 22px; }
+  .variantA .channel-row .meta { flex: 1; min-width: 0; }
+  .variantA .channel-row .meta .name { font-weight: 600; font-size: 14px; }
+  .variantA .channel-row .meta .now { font-size: 12px; color: var(--text-dim); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .variantA .add-row { display: flex; justify-content: center; margin-top: 18px; }
+  .variantA .add-row button { background: none; border: 1px dashed var(--border); color: var(--text-dim);
+    border-radius: 10px; padding: 12px 20px; width: 100%; font-size: 14px; }
+  .variantA .add-row button:hover { border-color: var(--accent); color: var(--accent); }
+  .variantA .edit-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px; }
+  .variantA .field { margin-bottom: 16px; text-align: left; }
+  .variantA .field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .variantA .field input[type=text] { width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel2); color: var(--text); }
+  .variantA .toggle-row { display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--border); }
+  .variantA .row-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .variantA .row-actions .danger { background: none; border: 1px solid var(--danger); color: var(--danger);
+    border-radius: 8px; padding: 10px 16px; }
+
+  /* ==================================================================
+     VARIANT B — Dashboard-first: card grid home, inline "+" tile that
+     expands, slide-over edit panel, small connect-status pill in header.
+     ================================================================== */
+  .variantB { min-height: 100vh; padding-bottom: 100px; }
+  .variantB header { display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 28px; border-bottom: 1px solid var(--border); }
+  .variantB .brand { font-size: 18px; font-weight: 700; }
+  .variantB .brand span { color: var(--accent); }
+  .variantB .plex-pill { display: flex; align-items: center; gap: 8px; font-size: 12px;
+    color: var(--text-dim); background: var(--panel); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .variantB .plex-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); }
+  .variantB .plex-pill.connected .dot { background: var(--accent2); }
+  .variantB .plex-pill.connected { color: var(--accent2); }
+  .variantB .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px; padding: 24px 28px; }
+  .variantB .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; cursor: pointer; }
+  .variantB .card:hover { border-color: var(--accent); }
+  .variantB .card .thumb { height: 90px; display: flex; align-items: center; justify-content: center;
+    font-size: 34px; background: linear-gradient(135deg, var(--panel2), #2a2f3a); }
+  .variantB .card .body { padding: 12px 14px; }
+  .variantB .card .num { font-size: 11px; color: var(--accent); font-weight: 700; }
+  .variantB .card .name { font-weight: 600; font-size: 14px; margin: 2px 0 4px; }
+  .variantB .card .now { font-size: 12px; color: var(--text-dim); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .variantB .card .badges { display: flex; gap: 6px; margin-top: 8px; }
+  .variantB .badge { font-size: 10px; background: var(--panel2); color: var(--text-dim);
+    border-radius: 4px; padding: 2px 6px; }
+  .variantB .add-card { border: 1px dashed var(--border); display: flex; align-items: center;
+    justify-content: center; flex-direction: column; gap: 6px; color: var(--text-dim); min-height: 150px; }
+  .variantB .add-card:hover { border-color: var(--accent); color: var(--accent); }
+  .variantB .add-card .plus { font-size: 28px; }
+  .variantB .add-form { padding: 16px; }
+  .variantB .add-form input[type=text] { width: 100%; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 13px;
+    margin-bottom: 8px; }
+  .variantB .add-form .result { font-size: 12px; color: var(--accent2); margin-bottom: 8px; }
+  .variantB .add-form button { background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 8px 14px; font-size: 13px; width: 100%; }
+  .variantB .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500; }
+  .variantB .slideover { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw;
+    background: var(--panel); border-left: 1px solid var(--border); z-index: 501; padding: 24px;
+    overflow-y: auto; }
+  .variantB .slideover h2 { font-size: 18px; margin-bottom: 18px; display: flex; justify-content: space-between; }
+  .variantB .slideover .close { background: none; border: none; color: var(--text-dim); font-size: 18px; }
+  .variantB .field { margin-bottom: 14px; }
+  .variantB .field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .04em; }
+  .variantB .field input[type=text] { width: 100%; padding: 9px 11px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 13px; }
+  .variantB .logo-row { display: flex; gap: 8px; align-items: center; }
+  .variantB .logo-row .swatch { width: 40px; height: 40px; border-radius: 8px; background: var(--panel2);
+    display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .variantB .logo-row button { background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+  .variantB .toggle-row { display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--border); margin-top: 4px; font-size: 13px; }
+  .variantB .slideover .danger { margin-top: 20px; background: none; border: 1px solid var(--danger);
+    color: var(--danger); border-radius: 6px; padding: 8px 14px; font-size: 12px; width: 100%; }
+  .switch { width: 38px; height: 22px; border-radius: 999px; background: var(--border); position: relative;
+    border: none; cursor: pointer; flex-shrink: 0; }
+  .switch.on { background: var(--accent); }
+  .switch::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; top: 2px; left: 2px; transition: left .15s; }
+  .switch.on::after { left: 18px; }
+
+  /* ==================================================================
+     VARIANT C — EPG/guide-first: the home screen IS a channel x timeline
+     grid (like a real cable guide). Add = row at bottom. Edit = drawer.
+     ================================================================== */
+  .variantC { min-height: 100vh; padding-bottom: 100px; }
+  .variantC header { padding: 16px 24px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; }
+  .variantC .brand { font-size: 18px; font-weight: 700; }
+  .variantC .brand span { color: var(--accent); }
+  .variantC .plex-banner { background: linear-gradient(90deg, #2a2340, #1c1f26); border-bottom: 1px solid var(--border);
+    padding: 10px 24px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+  .variantC .plex-banner button { background: var(--accent); border: none; color: #fff; border-radius: 6px;
+    padding: 7px 14px; font-size: 12px; }
+  .variantC .plex-banner .x { background: none; border: none; color: var(--text-dim); font-size: 16px; margin-left: 10px; }
+  .variantC .guide { padding: 16px 24px; }
+  .variantC .timeline-head { display: grid; grid-template-columns: 220px repeat(4, 1fr); gap: 1px;
+    margin-bottom: 6px; font-size: 11px; color: var(--text-dim); }
+  .variantC .timeline-head div { padding: 4px 8px; }
+  .variantC .channel-row { display: grid; grid-template-columns: 220px repeat(4, 1fr); gap: 1px;
+    margin-bottom: 6px; border-radius: 8px; overflow: hidden; }
+  .variantC .channel-row .chinfo { background: var(--panel); padding: 10px 12px; display: flex;
+    align-items: center; gap: 10px; cursor: pointer; }
+  .variantC .channel-row .chinfo:hover { outline: 1px solid var(--accent); }
+  .variantC .channel-row .chinfo .num { font-size: 18px; font-weight: 700; color: var(--accent); width: 22px; }
+  .variantC .channel-row .chinfo .emoji { font-size: 20px; }
+  .variantC .channel-row .chinfo .name { font-size: 13px; font-weight: 600; }
+  .variantC .channel-row .chinfo .sub { font-size: 11px; color: var(--text-dim); }
+  .variantC .slot { background: var(--panel2); padding: 10px 10px; font-size: 12px; color: var(--text-dim);
+    display: flex; align-items: center; border-left: 1px solid var(--border); }
+  .variantC .slot.now { background: #24304a; color: var(--text); }
+  .variantC .slot b { color: var(--text); font-weight: 600; }
+  .variantC .add-channel-row { display: grid; grid-template-columns: 220px 1fr; gap: 1px; margin-top: 10px; }
+  .variantC .add-channel-row .chinfo { background: none; border: 1px dashed var(--border); border-radius: 8px;
+    padding: 10px 12px; display: flex; align-items: center; gap: 8px; color: var(--text-dim); cursor: pointer; }
+  .variantC .add-channel-row .chinfo:hover { border-color: var(--accent); color: var(--accent); }
+  .variantC .add-inline { background: var(--panel); border-radius: 8px; padding: 14px; display: flex; gap: 10px; align-items: center; }
+  .variantC .add-inline input[type=text] { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel2); color: var(--text); font-size: 13px; }
+  .variantC .add-inline button { background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 8px 14px; font-size: 13px; }
+  .variantC .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500; }
+  .variantC .drawer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel);
+    border-top: 1px solid var(--border); z-index: 501; padding: 24px; max-height: 60vh; overflow-y: auto;
+    border-radius: 16px 16px 0 0; }
+  .variantC .drawer .handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px;
+    margin: 0 auto 18px; }
+  .variantC .drawer h2 { font-size: 17px; margin-bottom: 16px; }
+  .variantC .drawer .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .variantC .field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; }
+  .variantC .field input[type=text] { width: 100%; padding: 9px 11px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel2); color: var(--text); font-size: 13px; }
+  .variantC .drawer .toggle-row { display: flex; justify-content: space-between; align-items: center;
+    margin-top: 14px; font-size: 13px; }
+  .variantC .drawer .actions { display: flex; gap: 10px; margin-top: 20px; }
+  .variantC .drawer .close-btn { background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 8px 16px; font-size: 13px; }
+  .variantC .drawer .danger { background: none; border: 1px solid var(--danger); color: var(--danger);
+    border-radius: 6px; padding: 8px 16px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="switcher">
+  <button id="prev" aria-label="previous variant">←</button>
+  <div class="label" id="switcher-label"></div>
+  <button id="next" aria-label="next variant">→</button>
+</div>
+
+<script>
+/* ---------------- shared in-memory state (PROTOTYPE — no persistence) ---------------- */
+let state = {
+  plexConnected: false,
+  plexConnecting: false,
+  plexPin: null,
+  channels: [
+    { id: 1, number: '1', name: 'Classic Sitcoms', folder: '/media/tv/Classic Sitcoms',
+      shuffle: false, logoMode: 'auto', emoji: '📺', episodeCount: 142,
+      now: 'The One With The Pilot — S01E01' },
+    { id: 2, number: '2', name: '90s Cartoons', folder: '/media/tv/90s Cartoons',
+      shuffle: true, logoMode: 'manual', emoji: '🎨', episodeCount: 88,
+      now: 'Saturday Morning Mix — S03E12' },
+    { id: 3, number: '3', name: 'Late Night Movies', folder: '/media/movies/Late Night',
+      shuffle: false, logoMode: 'auto', emoji: '🎬', episodeCount: 34,
+      now: 'Midnight Feature #7' },
+  ],
+  nextId: 4,
+  ui: {
+    variantA: { screen: 'list', addStep: 'folder', folderInput: '', scanned: null, editingId: null },
+    variantB: { adding: false, folderInput: '', scanned: null, editingId: null },
+    variantC: { adding: false, folderInput: '', drawerId: null },
+  },
+};
+
+const EMOJIS = ['📺','🎬','🎨','🎮','🍿','🌙','🎭','🛸'];
+function scanFolder(path) {
+  const name = (path.split('/').filter(Boolean).pop() || 'New Channel')
+    .replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return { name, episodeCount: 8 + Math.floor(Math.random() * 60) };
+}
+function nextNumber() {
+  const used = new Set(state.channels.map(c => c.number));
+  let n = 1; while (used.has(String(n))) n++; return String(n);
+}
+function addChannel(folder, scanned) {
+  state.channels.push({
+    id: state.nextId++, number: nextNumber(), name: scanned.name, folder,
+    shuffle: false, logoMode: 'auto', emoji: EMOJIS[Math.floor(Math.random()*EMOJIS.length)],
+    episodeCount: scanned.episodeCount, now: 'Episode 1',
+  });
+}
+function startPlexConnect() {
+  state.plexConnecting = true;
+  state.plexPin = Array.from({length:4}, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
+  render();
+  setTimeout(() => { state.plexConnecting = false; state.plexConnected = true; render(); }, 1800);
+}
+
+/* ---------------- VARIANT A: wizard-first ---------------- */
+function renderVariantA() {
+  const ui = state.ui.variantA;
+  const banner = !state.plexConnected ? `
+    <div class="plex-banner">
+      <span>${state.plexConnecting ? `Waiting for confirmation&hellip; enter <b style="color:var(--accent2)">${state.plexPin}</b> at plex.tv/link` : 'Guide updates rely on Plex&rsquo;s slow daily refresh.'}</span>
+      ${!state.plexConnecting ? `<button data-action="connect-plex">Connect Plex</button>` : ''}
+    </div>` : '';
+
+  let body = '';
+  if (ui.editingId != null) {
+    const c = state.channels.find(c => c.id === ui.editingId);
+    body = `
+      <div class="edit-panel">
+        <h2 style="margin-bottom:18px;">Edit channel</h2>
+        <div class="field"><label>Name</label><input type="text" data-field="name" value="${c.name}"></div>
+        <div class="field"><label>Channel number</label><input type="text" data-field="number" value="${c.number}"></div>
+        <div class="field"><label>Logo</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="width:36px;height:36px;border-radius:8px;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:16px;">${c.emoji}</div>
+            <span style="font-size:12px;color:var(--text-dim);">${c.logoMode === 'auto' ? 'Auto-detected from folder' : 'Manually uploaded'}</span>
+            <button data-action="upload-logo" style="margin-left:auto;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;">Upload&hellip;</button>
+          </div>
+        </div>
+        <div class="toggle-row"><span>Shuffle order</span><button class="switch ${c.shuffle ? 'on' : ''}" data-action="toggle-shuffle"></button></div>
+        <div class="row-actions">
+          <button class="cta" data-action="save-edit">Save</button>
+          <button class="danger" data-action="delete-channel">Delete</button>
+        </div>
+        <button class="ghost" data-action="back-to-list">Cancel</button>
+      </div>`;
+  } else if (ui.screen === 'add') {
+    if (ui.addStep === 'folder') {
+      body = `
+        <div class="step">
+          <div class="icon">📁</div>
+          <h2>Point at a folder</h2>
+          <p>Pick the folder with this show's seasons in it. chanarr scans it and loops everything on its own channel.</p>
+          <input type="text" placeholder="/media/tv/My Show" data-field="folderInput" value="${ui.folderInput}">
+          <button class="cta" data-action="scan-folder" ${!ui.folderInput ? 'disabled' : ''}>Scan folder</button>
+        </div>`;
+    } else {
+      body = `
+        <div class="step">
+          <div class="icon">✅</div>
+          <h2>Found ${ui.scanned.episodeCount} episodes</h2>
+          <div class="scan-result">Channel name (from folder): <b>${ui.scanned.name}</b><br>Channel number: <b>${nextNumber()}</b> (next free)<br>Order: <b>In order</b> &middot; Shuffle can be turned on after creating</div>
+          <button class="cta" data-action="create-channel">Create channel</button>
+          <button class="ghost" data-action="back-to-list">Cancel</button>
+        </div>`;
+    }
+  } else {
+    body = `
+      <div class="channel-list">
+        ${state.channels.map(c => `
+          <div class="channel-row" data-action="edit-channel" data-id="${c.id}">
+            <span class="num">${c.number}</span>
+            <span class="emoji">${c.emoji}</span>
+            <div class="meta"><div class="name">${c.name}</div><div class="now">${c.now}</div></div>
+          </div>`).join('')}
+        <div class="add-row"><button data-action="start-add">+ Point at a new folder</button></div>
+      </div>`;
+  }
+
+  return `<div class="variantA"><div class="wrap">
+    <div class="topbar"><div class="brand">chan<span>arr</span></div></div>
+    ${banner}
+    ${body}
+  </div></div>`;
+}
+
+/* ---------------- VARIANT B: dashboard-first ---------------- */
+function renderVariantB() {
+  const ui = state.ui.variantB;
+  const pill = `<div class="plex-pill ${state.plexConnected ? 'connected' : ''}" data-action="connect-plex">
+    <span class="dot"></span>${state.plexConnected ? 'Plex connected' : (state.plexConnecting ? `Code ${state.plexPin}&hellip;` : 'Connect Plex')}
+  </div>`;
+
+  const addCard = ui.adding ? `
+    <div class="card add-form">
+      <input type="text" placeholder="/media/tv/My Show" data-field="folderInput" value="${ui.folderInput}">
+      ${ui.scanned ? `<div class="result">Found ${ui.scanned.episodeCount} episodes &rarr; "${ui.scanned.name}"</div>
+        <button data-action="create-channel">Create channel</button>`
+        : `<button data-action="scan-folder" ${!ui.folderInput ? 'disabled' : ''}>Scan folder</button>`}
+    </div>` : `
+    <div class="card add-card" data-action="start-add">
+      <div class="plus">+</div><div>Add channel</div>
+    </div>`;
+
+  const cards = state.channels.map(c => `
+    <div class="card" data-action="edit-channel" data-id="${c.id}">
+      <div class="thumb">${c.emoji}</div>
+      <div class="body">
+        <div class="num">CH ${c.number}</div>
+        <div class="name">${c.name}</div>
+        <div class="now">${c.now}</div>
+        <div class="badges"><span class="badge">${c.episodeCount} eps</span>${c.shuffle ? '<span class="badge">shuffle</span>' : ''}</div>
+      </div>
+    </div>`).join('');
+
+  let slideover = '';
+  if (ui.editingId != null) {
+    const c = state.channels.find(c => c.id === ui.editingId);
+    slideover = `
+      <div class="overlay" data-action="close-slideover"></div>
+      <div class="slideover">
+        <h2>${c.name}<button class="close" data-action="close-slideover">&times;</button></h2>
+        <div class="field"><label>Name</label><input type="text" data-field="name" value="${c.name}"></div>
+        <div class="field"><label>Channel number</label><input type="text" data-field="number" value="${c.number}"></div>
+        <div class="field"><label>Logo</label>
+          <div class="logo-row">
+            <div class="swatch">${c.emoji}</div>
+            <span style="font-size:12px;color:var(--text-dim);flex:1;">${c.logoMode === 'auto' ? 'Auto-detected' : 'Manual upload'}</span>
+            <button data-action="upload-logo">Upload&hellip;</button>
+          </div>
+        </div>
+        <div class="toggle-row"><span>Shuffle order</span><button class="switch ${c.shuffle ? 'on' : ''}" data-action="toggle-shuffle"></button></div>
+        <button class="danger" data-action="delete-channel">Delete channel</button>
+      </div>`;
+  }
+
+  return `<div class="variantB">
+    <header><div class="brand">chan<span>arr</span></div>${pill}</header>
+    <div class="grid">${cards}${addCard}</div>
+    ${slideover}
+  </div>`;
+}
+
+/* ---------------- VARIANT C: EPG/guide-first ---------------- */
+function renderVariantC() {
+  const ui = state.ui.variantC;
+  const now = new Date();
+  const slots = [0,1,2,3].map(i => {
+    const d = new Date(now.getTime() + i*3600e3);
+    return d.getHours().toString().padStart(2,'0') + ':00';
+  });
+
+  const banner = !state.plexConnected ? `
+    <div class="plex-banner">
+      <span>${state.plexConnecting ? `Enter <b style="color:var(--accent2)">${state.plexPin}</b> at plex.tv/link to finish connecting&hellip;` : 'Connect Plex so guide edits show up instantly instead of waiting on Plex&rsquo;s daily refresh.'}</span>
+      <span>${!state.plexConnecting ? `<button data-action="connect-plex">Connect Plex</button>` : ''}<button class="x" data-action="dismiss-banner">&times;</button></span>
+    </div>` : '';
+
+  const head = `<div class="timeline-head"><div></div>${slots.map(s=>`<div>${s}</div>`).join('')}</div>`;
+
+  const rows = state.channels.map(c => `
+    <div class="channel-row">
+      <div class="chinfo" data-action="open-drawer" data-id="${c.id}">
+        <span class="num">${c.number}</span><span class="emoji">${c.emoji}</span>
+        <div><div class="name">${c.name}</div><div class="sub">${c.episodeCount} eps${c.shuffle ? ' &middot; shuffle' : ''}</div></div>
+      </div>
+      <div class="slot now"><b>${c.now}</b></div>
+      <div class="slot">Next episode</div>
+      <div class="slot">Next episode</div>
+      <div class="slot">Next episode</div>
+    </div>`).join('');
+
+  const addRow = ui.adding ? `
+    <div class="add-inline">
+      <input type="text" placeholder="/media/tv/My Show" data-field="folderInput" value="${ui.folderInput}">
+      ${ui.scanned ? `<span style="font-size:12px;color:var(--accent2);">${ui.scanned.episodeCount} eps found: "${ui.scanned.name}"</span><button data-action="create-channel">Create</button>`
+        : `<button data-action="scan-folder">Scan</button>`}
+    </div>` : `
+    <div class="add-channel-row"><div class="chinfo" data-action="start-add"><span>+</span><span>Point at a folder to add a channel</span></div></div>`;
+
+  let drawer = '';
+  if (ui.drawerId != null) {
+    const c = state.channels.find(c => c.id === ui.drawerId);
+    drawer = `
+      <div class="drawer-overlay" data-action="close-drawer"></div>
+      <div class="drawer">
+        <div class="handle"></div>
+        <h2>${c.emoji} ${c.name} &middot; CH ${c.number}</h2>
+        <div class="grid2">
+          <div class="field"><label>Name</label><input type="text" data-field="name" value="${c.name}"></div>
+          <div class="field"><label>Channel number</label><input type="text" data-field="number" value="${c.number}"></div>
+        </div>
+        <div class="toggle-row"><span>Shuffle order</span><button class="switch ${c.shuffle ? 'on' : ''}" data-action="toggle-shuffle"></button></div>
+        <div class="toggle-row"><span>Logo: ${c.logoMode === 'auto' ? 'auto-detected' : 'manual'}</span><button class="close-btn" data-action="upload-logo">Upload&hellip;</button></div>
+        <div class="actions">
+          <button class="close-btn" data-action="close-drawer">Done</button>
+          <button class="danger" data-action="delete-channel">Delete channel</button>
+        </div>
+      </div>`;
+  }
+
+  return `<div class="variantC">
+    <header><div class="brand">chan<span>arr</span></div><div style="font-size:12px;color:var(--text-dim);">Guide</div></header>
+    ${banner}
+    <div class="guide">${head}${rows}${addRow}</div>
+    ${drawer}
+  </div>`;
+}
+
+/* ---------------- switcher plumbing ---------------- */
+const VARIANTS = {
+  A: { render: renderVariantA, name: 'Wizard-first onboarding' },
+  B: { render: renderVariantB, name: 'Dashboard + slide-over' },
+  C: { render: renderVariantC, name: 'Live guide grid' },
+};
+const order = ['A','B','C'];
+
+function getVariant() {
+  try {
+    const v = new URLSearchParams(location.search).get('variant');
+    if (v && VARIANTS[v]) return v;
+  } catch (e) {}
+  return 'A';
+}
+function setVariant(v) {
+  try { history.replaceState(null, '', `${location.pathname}?variant=${v}`); } catch (e) {}
+  render();
+}
+let currentVariant = getVariant();
+
+function render() {
+  document.getElementById('app').innerHTML = VARIANTS[currentVariant].render();
+  document.getElementById('switcher-label').innerHTML = `<b>${currentVariant}</b> — ${VARIANTS[currentVariant].name}`;
+}
+
+document.getElementById('prev').onclick = () => {
+  const i = order.indexOf(currentVariant);
+  currentVariant = order[(i - 1 + order.length) % order.length];
+  setVariant(currentVariant);
+};
+document.getElementById('next').onclick = () => {
+  const i = order.indexOf(currentVariant);
+  currentVariant = order[(i + 1) % order.length];
+  setVariant(currentVariant);
+};
+document.addEventListener('keydown', (e) => {
+  const t = document.activeElement;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') document.getElementById('prev').click();
+  if (e.key === 'ArrowRight') document.getElementById('next').click();
+});
+
+/* ---------------- delegated event handling (all variants) ---------------- */
+document.getElementById('app').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  const id = el.dataset.id ? Number(el.dataset.id) : null;
+  const ui = state.ui['variant' + currentVariant];
+
+  if (action === 'connect-plex') { startPlexConnect(); return; }
+  if (action === 'dismiss-banner') { state.plexConnected = true; /* prototype: dismiss == stop nagging */ render(); return; }
+
+  if (currentVariant === 'A') {
+    if (action === 'start-add') { ui.screen = 'add'; ui.addStep = 'folder'; ui.folderInput = ''; ui.scanned = null; }
+    if (action === 'scan-folder') { ui.scanned = scanFolder(ui.folderInput); ui.addStep = 'scanned'; }
+    if (action === 'create-channel') { addChannel(ui.folderInput, ui.scanned); ui.screen = 'list'; }
+    if (action === 'back-to-list') { ui.screen = 'list'; ui.editingId = null; }
+    if (action === 'edit-channel') ui.editingId = id;
+    if (action === 'save-edit') ui.editingId = null;
+    if (action === 'delete-channel') { state.channels = state.channels.filter(c => c.id !== ui.editingId); ui.editingId = null; }
+    if (action === 'toggle-shuffle') { const c = state.channels.find(c => c.id === ui.editingId); c.shuffle = !c.shuffle; }
+    if (action === 'upload-logo') { const c = state.channels.find(c => c.id === ui.editingId); c.logoMode = 'manual'; }
+  }
+  if (currentVariant === 'B') {
+    if (action === 'start-add') { ui.adding = true; ui.folderInput = ''; ui.scanned = null; }
+    if (action === 'scan-folder') ui.scanned = scanFolder(ui.folderInput);
+    if (action === 'create-channel') { addChannel(ui.folderInput, ui.scanned); ui.adding = false; }
+    if (action === 'edit-channel') ui.editingId = id;
+    if (action === 'close-slideover') ui.editingId = null;
+    if (action === 'delete-channel') { state.channels = state.channels.filter(c => c.id !== ui.editingId); ui.editingId = null; }
+    if (action === 'toggle-shuffle') { const c = state.channels.find(c => c.id === ui.editingId); c.shuffle = !c.shuffle; }
+    if (action === 'upload-logo') { const c = state.channels.find(c => c.id === ui.editingId); c.logoMode = 'manual'; }
+  }
+  if (currentVariant === 'C') {
+    if (action === 'start-add') { ui.adding = true; ui.folderInput = ''; ui.scanned = null; }
+    if (action === 'scan-folder') ui.scanned = scanFolder(ui.folderInput);
+    if (action === 'create-channel') { addChannel(ui.folderInput, ui.scanned); ui.adding = false; }
+    if (action === 'open-drawer') ui.drawerId = id;
+    if (action === 'close-drawer') ui.drawerId = null;
+    if (action === 'delete-channel') { state.channels = state.channels.filter(c => c.id !== ui.drawerId); ui.drawerId = null; }
+    if (action === 'toggle-shuffle') { const c = state.channels.find(c => c.id === ui.drawerId); c.shuffle = !c.shuffle; }
+    if (action === 'upload-logo') { const c = state.channels.find(c => c.id === ui.drawerId); c.logoMode = 'manual'; }
+  }
+  render();
+});
+
+document.getElementById('app').addEventListener('input', (e) => {
+  const el = e.target.closest('[data-field]');
+  if (!el) return;
+  const field = el.dataset.field;
+  const ui = state.ui['variant' + currentVariant];
+
+  if (field === 'folderInput') {
+    ui.folderInput = el.value;
+    const scanBtn = document.querySelector('[data-action="scan-folder"]');
+    if (scanBtn) scanBtn.disabled = !ui.folderInput;
+    return;
+  }
+  // name/number fields belong to whichever channel is being edited in this variant
+  const editingId = ui.editingId ?? ui.drawerId;
+  if (editingId != null) {
+    const c = state.channels.find(c => c.id === editingId);
+    if (field === 'name') c.name = el.value;
+    if (field === 'number') c.number = el.value;
+  }
+});
+
+render();
+</script>
+</body>
+</html>
