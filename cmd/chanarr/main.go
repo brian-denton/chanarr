@@ -19,16 +19,17 @@ func main() {
 	}
 	cfg := config.Load()
 
-	// TODO: replace with internal/store-backed lineup once channel
+	// TODO: replace with internal/store-backed lineup/guide once channel
 	// persistence exists.
 	emptyLineup := func() []tuner.LineupEntry { return nil }
+	emptyGuide := func() ([]guide.ChannelSchedule, error) { return nil, nil }
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/discover.json", tuner.DiscoverHandler)
 	mux.HandleFunc("/lineup.json", tuner.LineupHandler(emptyLineup))
 	mux.HandleFunc("/lineup_status.json", tuner.LineupStatusHandler)
 	mux.HandleFunc("/device.xml", tuner.DeviceXMLHandler)
-	mux.HandleFunc("/epg.xml", guide.Handler)
+	mux.HandleFunc("/epg.xml", guide.Handler(emptyGuide))
 	mux.HandleFunc("/stream/", stream.Handler)
 	mux.Handle("/api/", httpapi.Mux())
 	// TODO: serve the embedded React build (web/dist) for everything else.

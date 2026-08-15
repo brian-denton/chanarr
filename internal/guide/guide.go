@@ -12,21 +12,30 @@
 // sync with what's actually playing (docs/adr/0001).
 package guide
 
-import "net/http"
+import (
+	"net/http"
+	"time"
+)
 
 const (
 	HorizonHours = 12
 	RefreshHours = 4
 )
 
-// Handler serves GET /epg.xml. TODO: implement — walk internal/schedule.ProgramAt
-// per channel across the horizon and render XMLTV.
-func Handler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
-// PushReload triggers Plex's /livetv/dvrs/{key}/reloadGuide after a guide
-// regeneration, using the token from internal/plexlink. TODO: implement.
-func PushReload() error {
-	return errNotImplemented
+// Handler serves GET /epg.xml.
+func Handler(provider EpochProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		channels, err := provider()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		body, err := BuildXMLTV(channels, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		w.Write(body)
+	}
 }
