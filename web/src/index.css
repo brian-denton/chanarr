@@ -164,6 +164,11 @@ a {
   font-size: 13px;
 }
 
+.plex-banner button.link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .plex-banner button.dismiss {
   background: none;
   border: none;
@@ -199,6 +204,10 @@ a {
   background: var(--panel);
   color: var(--text);
   font-size: 13px;
+}
+
+.plex-connect-form input::placeholder {
+  color: var(--text-dim);
 }
 
 /* ---------- Wizard step (onboarding) ---------- */
