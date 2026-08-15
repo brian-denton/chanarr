@@ -31,9 +31,6 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("chanarr device ID:", deviceID)
-	// TODO: internal/tuner.DeviceID is still a fixed const — wire this
-	// store-generated deviceID into DiscoverHandler/DeviceXMLHandler
-	// (mirroring LineupHandler's provider pattern) as a follow-up.
 
 	lineupProvider := func() []tuner.LineupEntry {
 		channels, err := db.Channels()
@@ -80,10 +77,10 @@ func main() {
 	api := httpapi.NewServer(db, cfg.LogosDir)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/discover.json", tuner.DiscoverHandler)
+	mux.HandleFunc("/discover.json", tuner.DiscoverHandler(deviceID))
 	mux.HandleFunc("/lineup.json", tuner.LineupHandler(lineupProvider))
 	mux.HandleFunc("/lineup_status.json", tuner.LineupStatusHandler)
-	mux.HandleFunc("/device.xml", tuner.DeviceXMLHandler)
+	mux.HandleFunc("/device.xml", tuner.DeviceXMLHandler(deviceID))
 	mux.HandleFunc("/epg.xml", guide.Handler(guideProvider))
 	mux.HandleFunc("/stream/{number}", stream.Handler(streamProvider))
 	mux.Handle("/api/", api.Mux())

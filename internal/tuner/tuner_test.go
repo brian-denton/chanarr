@@ -12,7 +12,7 @@ func TestDiscoverHandler(t *testing.T) {
 	req.Host = "192.168.1.148:5004"
 	rec := httptest.NewRecorder()
 
-	DiscoverHandler(rec, req)
+	DiscoverHandler("test-device-id")(rec, req)
 
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("Content-Type = %q, want application/json", ct)
@@ -30,8 +30,8 @@ func TestDiscoverHandler(t *testing.T) {
 	if got["LineupURL"] != wantBase+"/lineup.json" {
 		t.Errorf("LineupURL = %v, want %v", got["LineupURL"], wantBase+"/lineup.json")
 	}
-	if got["DeviceID"] != DeviceID {
-		t.Errorf("DeviceID = %v, want %v", got["DeviceID"], DeviceID)
+	if got["DeviceID"] != "test-device-id" {
+		t.Errorf("DeviceID = %v, want test-device-id", got["DeviceID"])
 	}
 	if got["TunerCount"] != float64(TunerCount) {
 		t.Errorf("TunerCount = %v, want %v", got["TunerCount"], TunerCount)
@@ -52,7 +52,7 @@ func TestDiscoverHandler_BaseURLTracksHostPerRequest(t *testing.T) {
 		req := httptest.NewRequest("GET", "/discover.json", nil)
 		req.Host = host
 		rec := httptest.NewRecorder()
-		DiscoverHandler(rec, req)
+		DiscoverHandler("test-device-id")(rec, req)
 
 		var got map[string]any
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
@@ -62,6 +62,21 @@ func TestDiscoverHandler_BaseURLTracksHostPerRequest(t *testing.T) {
 		if got["BaseURL"] != want {
 			t.Errorf("host %q: BaseURL = %v, want %v", host, got["BaseURL"], want)
 		}
+	}
+}
+
+func TestDiscoverHandler_UsesGivenDeviceID(t *testing.T) {
+	// Regression guard for this handler's whole point: the deviceID must
+	// come from the caller (internal/store), not a fixed constant.
+	req := httptest.NewRequest("GET", "/discover.json", nil)
+	req.Host = "192.168.1.148:5004"
+	rec := httptest.NewRecorder()
+	DiscoverHandler("chanarr-abc123")(rec, req)
+
+	var got map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &got)
+	if got["DeviceID"] != "chanarr-abc123" {
+		t.Errorf("DeviceID = %v, want chanarr-abc123", got["DeviceID"])
 	}
 }
 
@@ -153,7 +168,7 @@ func TestDeviceXMLHandler(t *testing.T) {
 	req.Host = "192.168.1.148:5004"
 	rec := httptest.NewRecorder()
 
-	DeviceXMLHandler(rec, req)
+	DeviceXMLHandler("test-device-id")(rec, req)
 
 	if ct := rec.Header().Get("Content-Type"); ct != "application/xml" {
 		t.Fatalf("Content-Type = %q, want application/xml", ct)
@@ -162,7 +177,7 @@ func TestDeviceXMLHandler(t *testing.T) {
 	if !strings.Contains(body, "<URLBase>http://192.168.1.148:5004</URLBase>") {
 		t.Errorf("body missing expected URLBase, got: %s", body)
 	}
-	if !strings.Contains(body, "<UDN>uuid:"+DeviceID+"</UDN>") {
+	if !strings.Contains(body, "<UDN>uuid:test-device-id</UDN>") {
 		t.Errorf("body missing expected UDN, got: %s", body)
 	}
 }

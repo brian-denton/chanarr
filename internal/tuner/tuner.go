@@ -15,11 +15,7 @@ import (
 	"net/http"
 )
 
-// DeviceID must be stable across restarts (persisted in internal/store) but
-// needs no Silicondust checksum format — any unique string works. TODO:
-// load from store instead of a fixed constant.
-const DeviceID = "chanarr1"
-
+// TunerCount is the tuner's advertised concurrent-stream capacity.
 const TunerCount = 4 // spec.md §4 default
 
 // Lineup is the tuner's advertised channel list, in HDHomeRun lineup.json
@@ -41,21 +37,25 @@ func jsonResponse(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// DiscoverHandler serves GET /discover.json.
-func DiscoverHandler(w http.ResponseWriter, r *http.Request) {
-	base := baseURL(r)
-	jsonResponse(w, map[string]any{
-		"FriendlyName":    "chanarr",
-		"Manufacturer":    "Silicondust",
-		"ModelNumber":     "HDTC-2US",
-		"FirmwareName":    "hdhomeruntc_atsc",
-		"FirmwareVersion": "20260101",
-		"DeviceID":        DeviceID,
-		"DeviceAuth":      "",
-		"TunerCount":      TunerCount,
-		"BaseURL":         base,
-		"LineupURL":       base + "/lineup.json",
-	})
+// DiscoverHandler serves GET /discover.json. deviceID must be stable
+// across restarts (internal/store.DeviceID persists it) but needs no
+// Silicondust checksum format — any unique string works.
+func DiscoverHandler(deviceID string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		base := baseURL(r)
+		jsonResponse(w, map[string]any{
+			"FriendlyName":    "chanarr",
+			"Manufacturer":    "Silicondust",
+			"ModelNumber":     "HDTC-2US",
+			"FirmwareName":    "hdhomeruntc_atsc",
+			"FirmwareVersion": "20260101",
+			"DeviceID":        deviceID,
+			"DeviceAuth":      "",
+			"TunerCount":      TunerCount,
+			"BaseURL":         base,
+			"LineupURL":       base + "/lineup.json",
+		})
+	}
 }
 
 // LineupHandler serves GET /lineup.json.
@@ -93,13 +93,15 @@ func LineupStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeviceXMLHandler serves GET /device.xml.
-func DeviceXMLHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/xml")
-	fmt.Fprintf(w, `<?xml version="1.0"?><root xmlns="urn:schemas-upnp-org:device-1-0">`+
-		`<specVersion><major>1</major><minor>0</minor></specVersion>`+
-		`<URLBase>%s</URLBase><device>`+
-		`<deviceType>urn:schemas-upnp-org:device-1-0:MediaServer:1</deviceType>`+
-		`<friendlyName>chanarr</friendlyName><manufacturer>Silicondust</manufacturer>`+
-		`<modelName>HDTC-2US</modelName><modelNumber>HDTC-2US</modelNumber>`+
-		`<UDN>uuid:%s</UDN></device></root>`, baseURL(r), DeviceID)
+func DeviceXMLHandler(deviceID string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintf(w, `<?xml version="1.0"?><root xmlns="urn:schemas-upnp-org:device-1-0">`+
+			`<specVersion><major>1</major><minor>0</minor></specVersion>`+
+			`<URLBase>%s</URLBase><device>`+
+			`<deviceType>urn:schemas-upnp-org:device-1-0:MediaServer:1</deviceType>`+
+			`<friendlyName>chanarr</friendlyName><manufacturer>Silicondust</manufacturer>`+
+			`<modelName>HDTC-2US</modelName><modelNumber>HDTC-2US</modelNumber>`+
+			`<UDN>uuid:%s</UDN></device></root>`, baseURL(r), deviceID)
+	}
 }
