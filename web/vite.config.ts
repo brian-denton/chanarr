@@ -8,6 +8,8 @@ export default defineConfig({
     proxy: {
       // chanarr's Go API, running separately in dev (`go run ./cmd/chanarr`).
       "/api": "http://localhost:5004",
+      // The per-channel MPEG-TS stream the in-app live preview plays.
+      "/stream": "http://localhost:5004",
     },
   },
   build: {

@@ -326,18 +326,47 @@ a {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 14px 16px;
   display: flex;
-  align-items: center;
-  gap: 14px;
+  align-items: stretch;
   margin-bottom: 10px;
-  cursor: pointer;
-  text-align: left;
   width: 100%;
+  overflow: hidden;
 }
 
 .channel-row:hover {
   border-color: var(--accent);
+}
+
+/* The main edit-opening area of a row. */
+.channel-main {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+/* The round play button that opens the live preview. */
+.preview-btn {
+  flex-shrink: 0;
+  width: 44px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: var(--panel2);
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.preview-btn:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 .channel-row .num {
@@ -550,4 +579,76 @@ a {
   color: var(--text-dim);
   margin-top: 10px;
   text-align: left;
+}
+
+/* ---------- Live channel preview ---------- */
+
+.preview-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.preview-modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  width: 100%;
+  max-width: 720px;
+}
+
+.preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.preview-num {
+  background: var(--panel2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  margin-right: 10px;
+}
+
+.preview-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.preview-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.preview-close:hover {
+  color: var(--text);
+}
+
+.preview-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 8px;
+  display: block;
+}
+
+.preview-now {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 10px;
 }

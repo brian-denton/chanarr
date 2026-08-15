@@ -77,6 +77,11 @@ export const api = {
 
   logoUrl: (id: number) => `/api/channels/${id}/logo`,
 
+  // The live MPEG-TS stream a tuner client (or the in-app preview) plays.
+  // Not under /api — it's the same endpoint Plex's HDHomeRun lineup points
+  // at. Keyed by channel number, matching the tuner lineup.
+  streamUrl: (number: string) => `/stream/${number}`,
+
   startPlexLink: () =>
     request<StartLinkResult>("/plex/link/start", { method: "POST" }),
 
