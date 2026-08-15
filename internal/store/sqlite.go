@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -364,6 +365,44 @@ func (s *sqliteStore) SaveShareCredentials(protocol, host, share, username, pass
 	)
 	if err != nil {
 		return fmt.Errorf("store: save share credentials %s://%s/%s: %w", protocol, host, share, err)
+	}
+	return nil
+}
+
+// RelocateLogos re-anchors relative uploaded-logo paths ("logos/3.png",
+// written by versions that stored data relative to the launch directory)
+// under logosDir. Absolute paths — current-era uploads and auto-detected
+// posters inside media folders — are left untouched.
+func (s *sqliteStore) RelocateLogos(logosDir string) error {
+	rows, err := s.db.Query(`SELECT id, logo FROM channels WHERE logo != ''`)
+	if err != nil {
+		return fmt.Errorf("store: relocate logos: %w", err)
+	}
+	defer rows.Close()
+
+	type change struct {
+		id   int64
+		logo string
+	}
+	var changes []change
+	for rows.Next() {
+		var c change
+		if err := rows.Scan(&c.id, &c.logo); err != nil {
+			return fmt.Errorf("store: relocate logos: %w", err)
+		}
+		if !filepath.IsAbs(c.logo) {
+			c.logo = filepath.Join(logosDir, filepath.Base(c.logo))
+			changes = append(changes, c)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, c := range changes {
+		if _, err := s.db.Exec(`UPDATE channels SET logo = ? WHERE id = ?`, c.logo, c.id); err != nil {
+			return fmt.Errorf("store: relocate logos: %w", err)
+		}
 	}
 	return nil
 }

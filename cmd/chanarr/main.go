@@ -21,13 +21,22 @@ func main() {
 	if err := config.CheckFFmpeg(); err != nil {
 		log.Fatal(err)
 	}
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("chanarr data directory:", cfg.DataDir)
 
 	db, err := store.Open(cfg.DBPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	// Databases from the launch-directory era stored uploaded-logo paths
+	// relative to the launch directory; re-anchor them under LogosDir.
+	if err := db.RelocateLogos(cfg.LogosDir); err != nil {
+		log.Fatal(err)
+	}
 	deviceID, err := db.DeviceID()
 	if err != nil {
 		log.Fatal(err)

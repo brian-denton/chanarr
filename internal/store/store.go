@@ -46,6 +46,11 @@ type Store interface {
 	PlexConnection() (serverURL, token string, connected bool, err error)
 	SavePlexConnection(serverURL, token string) error
 
+	// RelocateLogos re-anchors relative uploaded-logo paths (written by
+	// versions that persisted data relative to the launch directory)
+	// under logosDir; absolute paths are left untouched.
+	RelocateLogos(logosDir string) error
+
 	// ShareCredentials returns the stored login for a network share
 	// (internal/netfs), or empty strings with no error when none is
 	// stored — an unauthenticated (guest) attempt is the correct

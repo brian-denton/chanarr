@@ -42,6 +42,15 @@ internal/config/   startup config, ffmpeg presence check
 web/               React + TypeScript UI (Vite)
 ```
 
+## Data location
+
+Everything persistent (channels, Plex connection, share logins, uploaded logos) lives in one per-user data directory, regardless of where the server is launched from:
+
+- macOS: `~/Library/Application Support/chanarr`
+- Linux: `~/.config/chanarr`
+
+Override with `CHANARR_DATA_DIR` (throwaway dev runs, Docker volumes, multiple instances); `CHANARR_ADDR` overrides the listen address (default `:5004`). A `chanarr.db` left in the launch directory by older builds is copied into the data dir on first run.
+
 ## Develop
 
 Two dev servers, run separately — Vite proxies `/api` to the Go server (`web/vite.config.ts`):
