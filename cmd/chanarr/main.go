@@ -9,6 +9,7 @@ import (
 	"chanarr/internal/config"
 	"chanarr/internal/guide"
 	"chanarr/internal/httpapi"
+	"chanarr/internal/store"
 	"chanarr/internal/stream"
 	"chanarr/internal/tuner"
 )
@@ -19,8 +20,22 @@ func main() {
 	}
 	cfg := config.Load()
 
-	// TODO: replace with internal/store-backed lineup/guide once channel
-	// persistence exists.
+	db, err := store.Open(cfg.DBPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	deviceID, err := db.DeviceID()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("chanarr device ID:", deviceID)
+	// TODO: internal/tuner.DeviceID is still a fixed const — wire this
+	// store-generated deviceID into DiscoverHandler/DeviceXMLHandler
+	// (mirroring LineupHandler's provider pattern) as a follow-up.
+
+	// TODO: replace with db-backed lineup/guide providers once
+	// internal/httpapi exposes channel CRUD against internal/store.
 	emptyLineup := func() []tuner.LineupEntry { return nil }
 	emptyGuide := func() ([]guide.ChannelSchedule, error) { return nil, nil }
 

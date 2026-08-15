@@ -2,4 +2,6 @@ package store
 
 import "errors"
 
-var errNotImplemented = errors.New("store: not implemented")
+// ErrNotFound is returned when a lookup by ID (or an update/delete
+// targeting one) finds no matching row.
+var ErrNotFound = errors.New("store: not found")
