@@ -36,10 +36,17 @@ CREATE TABLE IF NOT EXISTS epochs (
 );
 
 CREATE TABLE IF NOT EXISTS epoch_items (
-	epoch_id    INTEGER NOT NULL REFERENCES epochs(id) ON DELETE CASCADE,
-	position    INTEGER NOT NULL,
-	path        TEXT NOT NULL,
-	duration_ns INTEGER NOT NULL,
+	epoch_id          INTEGER NOT NULL REFERENCES epochs(id) ON DELETE CASCADE,
+	position          INTEGER NOT NULL,
+	path              TEXT NOT NULL,
+	duration_ns       INTEGER NOT NULL,
+	video_codec       TEXT NOT NULL DEFAULT '',
+	width             INTEGER NOT NULL DEFAULT 0,
+	height            INTEGER NOT NULL DEFAULT 0,
+	frame_rate        REAL NOT NULL DEFAULT 0,
+	audio_codec       TEXT NOT NULL DEFAULT '',
+	audio_channels    INTEGER NOT NULL DEFAULT 0,
+	audio_sample_rate INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (epoch_id, position)
 );
 `
@@ -165,7 +172,8 @@ func (s *sqliteStore) CurrentEpoch(channelID int64) (schedule.Epoch, error) {
 	}
 
 	rows, err := s.db.Query(
-		`SELECT path, duration_ns FROM epoch_items WHERE epoch_id = ? ORDER BY position ASC`,
+		`SELECT path, duration_ns, video_codec, width, height, frame_rate, audio_codec, audio_channels, audio_sample_rate
+		 FROM epoch_items WHERE epoch_id = ? ORDER BY position ASC`,
 		epochID,
 	)
 	if err != nil {
@@ -177,10 +185,12 @@ func (s *sqliteStore) CurrentEpoch(channelID int64) (schedule.Epoch, error) {
 	for rows.Next() {
 		var path string
 		var durationNs int64
-		if err := rows.Scan(&path, &durationNs); err != nil {
+		var p schedule.StreamParams
+		if err := rows.Scan(&path, &durationNs, &p.VideoCodec, &p.Width, &p.Height, &p.FrameRate,
+			&p.AudioCodec, &p.AudioChannels, &p.AudioSampleRate); err != nil {
 			return schedule.Epoch{}, fmt.Errorf("store: scan epoch item: %w", err)
 		}
-		items = append(items, schedule.PlaylistItem{Path: path, Duration: time.Duration(durationNs)})
+		items = append(items, schedule.PlaylistItem{Path: path, Duration: time.Duration(durationNs), Params: p})
 	}
 	if err := rows.Err(); err != nil {
 		return schedule.Epoch{}, err
@@ -213,14 +223,18 @@ func (s *sqliteStore) SaveEpoch(epoch schedule.Epoch) (schedule.Epoch, error) {
 		return schedule.Epoch{}, fmt.Errorf("store: insert epoch: %w", err)
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO epoch_items (epoch_id, position, path, duration_ns) VALUES (?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO epoch_items
+		(epoch_id, position, path, duration_ns, video_codec, width, height, frame_rate, audio_codec, audio_channels, audio_sample_rate)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return schedule.Epoch{}, fmt.Errorf("store: insert epoch items: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, item := range epoch.Items {
-		if _, err := stmt.Exec(epochID, i, item.Path, int64(item.Duration)); err != nil {
+		p := item.Params
+		if _, err := stmt.Exec(epochID, i, item.Path, int64(item.Duration),
+			p.VideoCodec, p.Width, p.Height, p.FrameRate, p.AudioCodec, p.AudioChannels, p.AudioSampleRate); err != nil {
 			return schedule.Epoch{}, fmt.Errorf("store: insert epoch item: %w", err)
 		}
 	}

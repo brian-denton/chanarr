@@ -34,11 +34,28 @@ type Epoch struct {
 }
 
 // PlaylistItem is one media file's membership within an Epoch: the file
-// plus its cached (ffprobed-once) duration and its position in the
-// epoch's order.
+// plus its cached (ffprobed-once) duration and stream parameters, and its
+// position in the epoch's order.
 type PlaylistItem struct {
 	Path     string
 	Duration time.Duration
+	Params   StreamParams
+}
+
+// StreamParams is the subset of a file's audio/video characteristics
+// internal/stream's remux-vs-transcode gate needs (spec.md §7): remux is
+// only valid when these match across an epoch's items. Probed once by
+// internal/library at scan time and cached here, exactly like Duration —
+// internal/stream never re-probes at tune-in, which is what keeps tune-in
+// fast regardless of how many episodes a channel has.
+type StreamParams struct {
+	VideoCodec      string
+	Width           int
+	Height          int
+	FrameRate       float64 // frames per second
+	AudioCodec      string
+	AudioChannels   int
+	AudioSampleRate int
 }
 
 // Airing is the result of evaluating a Channel's timeline at a specific

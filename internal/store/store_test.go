@@ -173,10 +173,14 @@ func TestSaveEpoch_RoundTripsItemsInOrder(t *testing.T) {
 	}
 
 	start := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	params := schedule.StreamParams{
+		VideoCodec: "h264", Width: 1280, Height: 720, FrameRate: 23.976,
+		AudioCodec: "aac", AudioChannels: 2, AudioSampleRate: 48000,
+	}
 	items := []schedule.PlaylistItem{
-		{Path: "/a/ep1.mkv", Duration: 30 * time.Minute},
-		{Path: "/a/ep2.mkv", Duration: 45 * time.Minute},
-		{Path: "/a/ep3.mkv", Duration: time.Hour},
+		{Path: "/a/ep1.mkv", Duration: 30 * time.Minute, Params: params},
+		{Path: "/a/ep2.mkv", Duration: 45 * time.Minute, Params: params},
+		{Path: "/a/ep3.mkv", Duration: time.Hour, Params: params},
 	}
 	saved, err := s.SaveEpoch(schedule.Epoch{ChannelID: ch.ID, Start: start, Items: items})
 	if err != nil {
@@ -202,6 +206,9 @@ func TestSaveEpoch_RoundTripsItemsInOrder(t *testing.T) {
 	for i, want := range items {
 		if got.Items[i].Path != want.Path || got.Items[i].Duration != want.Duration {
 			t.Errorf("item %d = %+v, want %+v", i, got.Items[i], want)
+		}
+		if got.Items[i].Params != want.Params {
+			t.Errorf("item %d Params = %+v, want %+v", i, got.Items[i].Params, want.Params)
 		}
 	}
 }

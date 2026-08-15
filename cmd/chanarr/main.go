@@ -9,6 +9,7 @@ import (
 	"chanarr/internal/config"
 	"chanarr/internal/guide"
 	"chanarr/internal/httpapi"
+	"chanarr/internal/schedule"
 	"chanarr/internal/store"
 	"chanarr/internal/stream"
 	"chanarr/internal/tuner"
@@ -62,6 +63,20 @@ func main() {
 		return out, nil
 	}
 
+	streamProvider := func(number string) (schedule.Channel, schedule.Epoch, error) {
+		channels, err := db.Channels()
+		if err != nil {
+			return schedule.Channel{}, schedule.Epoch{}, err
+		}
+		for _, c := range channels {
+			if c.Number == number {
+				epoch, err := db.CurrentEpoch(c.ID)
+				return c, epoch, err
+			}
+		}
+		return schedule.Channel{}, schedule.Epoch{}, store.ErrNotFound
+	}
+
 	api := httpapi.NewServer(db, cfg.LogosDir)
 
 	mux := http.NewServeMux()
@@ -70,7 +85,7 @@ func main() {
 	mux.HandleFunc("/lineup_status.json", tuner.LineupStatusHandler)
 	mux.HandleFunc("/device.xml", tuner.DeviceXMLHandler)
 	mux.HandleFunc("/epg.xml", guide.Handler(guideProvider))
-	mux.HandleFunc("/stream/", stream.Handler)
+	mux.HandleFunc("/stream/{number}", stream.Handler(streamProvider))
 	mux.Handle("/api/", api.Mux())
 	// TODO: serve the embedded React build (web/dist) for everything else.
 

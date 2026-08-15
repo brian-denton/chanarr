@@ -70,12 +70,12 @@ func Scan(folder string) ([]schedule.PlaylistItem, error) {
 
 	items := make([]schedule.PlaylistItem, 0, len(paths))
 	for _, path := range paths {
-		duration, err := probeDuration(path)
+		duration, params, err := probeFile(path)
 		if err != nil {
 			log.Printf("library: skipping %s: %v", path, err)
 			continue
 		}
-		items = append(items, schedule.PlaylistItem{Path: path, Duration: duration})
+		items = append(items, schedule.PlaylistItem{Path: path, Duration: duration, Params: params})
 	}
 	return items, nil
 }

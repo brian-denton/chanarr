@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"chanarr/internal/schedule"
 )
 
 func TestParseEpisode(t *testing.T) {
@@ -46,11 +48,11 @@ func mustWriteFile(t *testing.T, path string) {
 	}
 }
 
-func withFakeProbe(t *testing.T, fn func(path string) (time.Duration, error)) {
+func withFakeProbe(t *testing.T, fn func(path string) (time.Duration, schedule.StreamParams, error)) {
 	t.Helper()
-	orig := probeDuration
-	probeDuration = fn
-	t.Cleanup(func() { probeDuration = orig })
+	orig := probeFile
+	probeFile = fn
+	t.Cleanup(func() { probeFile = orig })
 }
 
 func TestScan_RecursiveMediaFilteringAndLexicalOrder(t *testing.T) {
@@ -61,7 +63,9 @@ func TestScan_RecursiveMediaFilteringAndLexicalOrder(t *testing.T) {
 	mustWriteFile(t, filepath.Join(dir, "poster.jpg")) // non-media, must be skipped
 	mustWriteFile(t, filepath.Join(dir, "notes.txt"))  // non-media, must be skipped
 
-	withFakeProbe(t, func(path string) (time.Duration, error) { return 30 * time.Minute, nil })
+	withFakeProbe(t, func(path string) (time.Duration, schedule.StreamParams, error) {
+		return 30 * time.Minute, schedule.StreamParams{}, nil
+	})
 
 	items, err := Scan(dir)
 	if err != nil {
@@ -92,11 +96,11 @@ func TestScan_SkipsFilesThatFailToProbe(t *testing.T) {
 	mustWriteFile(t, filepath.Join(dir, "good.mkv"))
 	mustWriteFile(t, filepath.Join(dir, "corrupt.mkv"))
 
-	withFakeProbe(t, func(path string) (time.Duration, error) {
+	withFakeProbe(t, func(path string) (time.Duration, schedule.StreamParams, error) {
 		if strings.Contains(path, "corrupt") {
-			return 0, errors.New("ffprobe: invalid data")
+			return 0, schedule.StreamParams{}, errors.New("ffprobe: invalid data")
 		}
-		return time.Hour, nil
+		return time.Hour, schedule.StreamParams{}, nil
 	})
 
 	items, err := Scan(dir)
