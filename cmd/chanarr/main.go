@@ -9,6 +9,7 @@ import (
 	"chanarr/internal/config"
 	"chanarr/internal/guide"
 	"chanarr/internal/httpapi"
+	"chanarr/internal/netfs"
 	"chanarr/internal/schedule"
 	"chanarr/internal/store"
 	"chanarr/internal/stream"
@@ -75,7 +76,18 @@ func main() {
 		return schedule.Channel{}, schedule.Epoch{}, store.ErrNotFound
 	}
 
-	api := httpapi.NewServer(db, cfg.LogosDir)
+	// Network-share access (smb:// and nfs:// channel folders): mounts for
+	// scanning, plus the loopback bridge ffmpeg/ffprobe read remote files
+	// through. SMB logins live in the store, keyed by host+share.
+	netfsMgr := netfs.NewManager(func(protocol, host, share string) (netfs.Credentials, error) {
+		username, password, err := db.ShareCredentials(protocol, host, share)
+		return netfs.Credentials{Username: username, Password: password}, err
+	})
+	if err := netfsMgr.Start(); err != nil {
+		log.Fatal(err)
+	}
+
+	api := httpapi.NewServer(db, cfg.LogosDir, netfsMgr)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/discover.json", tuner.DiscoverHandler(deviceID))
@@ -83,7 +95,7 @@ func main() {
 	mux.HandleFunc("/lineup_status.json", tuner.LineupStatusHandler)
 	mux.HandleFunc("/device.xml", tuner.DeviceXMLHandler(deviceID))
 	mux.HandleFunc("/epg.xml", guide.Handler(guideProvider))
-	mux.HandleFunc("/stream/{number}", stream.Handler(streamProvider))
+	mux.HandleFunc("/stream/{number}", stream.Handler(streamProvider, netfsMgr.InputTarget))
 	mux.Handle("/api/", api.Mux())
 
 	ui, err := webui.Handler()

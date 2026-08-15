@@ -88,7 +88,7 @@ func tryFrameHashAt(t *testing.T, path string, offset time.Duration) (string, er
 
 // captureStream runs Handler against a real HTTP request for `duration`,
 // then returns the captured MPEG-TS bytes written to a temp file.
-func captureStream(t *testing.T, provider EpochProvider, number string, duration time.Duration) string {
+func captureStream(t *testing.T, provider EpochProvider, resolve InputResolver, number string, duration time.Duration) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
@@ -97,7 +97,7 @@ func captureStream(t *testing.T, provider EpochProvider, number string, duration
 	req.SetPathValue("number", number)
 	rec := httptest.NewRecorder()
 
-	Handler(provider)(rec, req)
+	Handler(provider, resolve)(rec, req)
 
 	out := filepath.Join(t.TempDir(), "capture.ts")
 	if err := os.WriteFile(out, rec.Body.Bytes(), 0o644); err != nil {
@@ -117,7 +117,7 @@ func TestHandler_UnknownChannelIs404(t *testing.T) {
 	req.SetPathValue("number", "1")
 	rec := httptest.NewRecorder()
 
-	Handler(provider)(rec, req)
+	Handler(provider, nil)(rec, req)
 	if rec.Code != 404 {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
@@ -131,7 +131,7 @@ func TestHandler_EmptyEpochIs503(t *testing.T) {
 	req.SetPathValue("number", "1")
 	rec := httptest.NewRecorder()
 
-	Handler(provider)(rec, req)
+	Handler(provider, nil)(rec, req)
 	if rec.Code != 503 {
 		t.Fatalf("status = %d, want 503", rec.Code)
 	}
@@ -168,7 +168,7 @@ func TestHandler_TunesInMidItemAndWrapsAround(t *testing.T) {
 	// fresh item), eventually returns to B (a full cycle completed) — via
 	// pattern-matching against reference hashes rather than one exact
 	// instant.
-	capturePath := captureStream(t, provider, "1", 8*time.Second)
+	capturePath := captureStream(t, provider, nil, "1", 8*time.Second)
 
 	wantB := frameHashAt(t, bPath, 1200*time.Millisecond) // B is static: any offset works
 	aReference := make(map[string]bool, 30)
@@ -250,7 +250,7 @@ func TestHandler_TranscodesMismatchedItems(t *testing.T) {
 	// (empirically ~3s on this machine, vs ~1s for a bare encode with no
 	// concat/filter) — a generous capture window avoids the test racing
 	// that startup cost rather than testing what it actually checks.
-	capturePath := captureStream(t, provider, "1", 8*time.Second)
+	capturePath := captureStream(t, provider, nil, "1", 8*time.Second)
 
 	// A valid, uniformly-dimensioned output is exactly what the
 	// normalization filter chain is responsible for — if it were broken

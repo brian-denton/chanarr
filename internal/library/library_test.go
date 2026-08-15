@@ -8,8 +8,21 @@ import (
 	"testing"
 	"time"
 
+	"chanarr/internal/netfs"
 	"chanarr/internal/schedule"
 )
+
+// mustMount opens a local netfs mount over dir — Scan and DetectLogo now
+// take mounts so folders can also live on SMB/NFS shares.
+func mustMount(t *testing.T, dir string) *netfs.Mount {
+	t.Helper()
+	m, err := netfs.NewManager(nil).Mount(dir)
+	if err != nil {
+		t.Fatalf("mount %s: %v", dir, err)
+	}
+	t.Cleanup(func() { m.Close() })
+	return m
+}
 
 func TestParseEpisode(t *testing.T) {
 	cases := []struct {
@@ -67,7 +80,7 @@ func TestScan_RecursiveMediaFilteringAndLexicalOrder(t *testing.T) {
 		return 30 * time.Minute, schedule.StreamParams{}, nil
 	})
 
-	items, err := Scan(dir)
+	items, err := Scan(mustMount(t, dir))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -103,7 +116,7 @@ func TestScan_SkipsFilesThatFailToProbe(t *testing.T) {
 		return time.Hour, schedule.StreamParams{}, nil
 	})
 
-	items, err := Scan(dir)
+	items, err := Scan(mustMount(t, dir))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -120,12 +133,12 @@ func TestDetectLogo_Found(t *testing.T) {
 	mustWriteFile(t, filepath.Join(dir, "Poster.JPG")) // case-insensitive match
 	mustWriteFile(t, filepath.Join(dir, "S01E01.mkv"))
 
-	path, ok := DetectLogo(dir)
+	name, ok := DetectLogo(mustMount(t, dir))
 	if !ok {
 		t.Fatal("expected DetectLogo to find Poster.JPG")
 	}
-	if path != filepath.Join(dir, "Poster.JPG") {
-		t.Errorf("got %q, want %q", path, filepath.Join(dir, "Poster.JPG"))
+	if name != "Poster.JPG" {
+		t.Errorf("got %q, want %q", name, "Poster.JPG")
 	}
 }
 
@@ -133,7 +146,7 @@ func TestDetectLogo_NotFound(t *testing.T) {
 	dir := t.TempDir()
 	mustWriteFile(t, filepath.Join(dir, "S01E01.mkv"))
 
-	_, ok := DetectLogo(dir)
+	_, ok := DetectLogo(mustMount(t, dir))
 	if ok {
 		t.Fatal("expected DetectLogo to find nothing")
 	}
@@ -143,21 +156,16 @@ func TestDetectLogo_IgnoresSubdirectories(t *testing.T) {
 	dir := t.TempDir()
 	mustWriteFile(t, filepath.Join(dir, "Season 1", "poster.jpg")) // not top-level
 
-	_, ok := DetectLogo(dir)
+	_, ok := DetectLogo(mustMount(t, dir))
 	if ok {
 		t.Fatal("expected DetectLogo to ignore a poster.jpg nested in a subfolder")
 	}
 }
 
-func TestDetectLogo_MissingFolder(t *testing.T) {
-	_, ok := DetectLogo("/no/such/folder/chanarr-test")
-	if ok {
-		t.Fatal("expected ok=false for a missing folder")
-	}
-}
-
-func TestScan_MissingFolder(t *testing.T) {
-	_, err := Scan("/no/such/folder/chanarr-test")
+func TestMount_MissingFolder(t *testing.T) {
+	// A bad local path now fails at mount time (netfs stats it up front),
+	// before Scan or DetectLogo ever run.
+	_, err := netfs.NewManager(nil).Mount("/no/such/folder/chanarr-test")
 	if err == nil {
 		t.Fatal("expected an error for a missing folder, got nil")
 	}
@@ -165,7 +173,7 @@ func TestScan_MissingFolder(t *testing.T) {
 
 func TestScan_EmptyFolder(t *testing.T) {
 	dir := t.TempDir()
-	items, err := Scan(dir)
+	items, err := Scan(mustMount(t, dir))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

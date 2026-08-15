@@ -42,7 +42,14 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := library.Scan(req.Folder)
+	mount, err := s.netfs.Mount(req.Folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	defer mount.Close()
+
+	items, err := library.Scan(mount)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -61,14 +68,21 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		Number: req.Number, Name: req.Name, Folder: req.Folder,
 		Shuffle: req.Shuffle, ShuffleSeed: req.ShuffleSeed,
 	}
-	if logoPath, ok := library.DetectLogo(req.Folder); ok {
-		ch.Logo = logoPath
-	}
-
 	ch, err = s.store.SaveChannel(ch)
 	if err != nil {
 		writeStoreError(w, err)
 		return
+	}
+	// Logo attachment needs the channel's ID (remote posters are copied to
+	// logosDir under it), so it happens after the insert; a failure here
+	// just means no auto-logo, never a failed channel creation.
+	if name, ok := library.DetectLogo(mount); ok {
+		if logoPath, err := s.materializeLogo(mount, name, ch.ID); err == nil {
+			ch.Logo = logoPath
+			if updated, err := s.store.SaveChannel(ch); err == nil {
+				ch = updated
+			}
+		}
 	}
 
 	ordered := applyShuffle(items, ch.Shuffle, ch.ShuffleSeed)
@@ -137,7 +151,14 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if shuffleChanged {
-		items, err := library.Scan(updated.Folder)
+		mount, err := s.netfs.Mount(updated.Folder)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		defer mount.Close()
+
+		items, err := library.Scan(mount)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -194,7 +215,14 @@ func (s *Server) handleRescanChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := library.Scan(ch.Folder)
+	mount, err := s.netfs.Mount(ch.Folder)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer mount.Close()
+
+	items, err := library.Scan(mount)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

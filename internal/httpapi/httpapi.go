@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sync"
 
+	"chanarr/internal/netfs"
 	"chanarr/internal/plexlink"
 	"chanarr/internal/store"
 )
@@ -18,6 +19,7 @@ import (
 type Server struct {
 	store    store.Store
 	logosDir string
+	netfs    *netfs.Manager
 
 	// startLink/pollLink default to plexlink's real functions; injected as
 	// fields (matching internal/tuner's and internal/guide's provider-func
@@ -31,11 +33,13 @@ type Server struct {
 }
 
 // NewServer builds a Server. logosDir is where uploaded channel logos are
-// stored (config.Config.LogosDir).
-func NewServer(st store.Store, logosDir string) *Server {
+// stored (config.Config.LogosDir). nfs mounts channel folders wherever
+// they live — local disk or a network share (internal/netfs).
+func NewServer(st store.Store, logosDir string, nfs *netfs.Manager) *Server {
 	return &Server{
 		store:        st,
 		logosDir:     logosDir,
+		netfs:        nfs,
 		startLink:    plexlink.StartLink,
 		pollLink:     plexlink.PollLink,
 		linkAttempts: make(map[int64]*linkAttempt),

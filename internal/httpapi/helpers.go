@@ -5,14 +5,18 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
+	"chanarr/internal/netfs"
 	"chanarr/internal/schedule"
 	"chanarr/internal/store"
 )
@@ -160,4 +164,34 @@ func itemsEqualAsSet(a, b []schedule.PlaylistItem) bool {
 		}
 	}
 	return true
+}
+
+// materializeLogo turns a detected logo (a filename inside the channel's
+// folder — library.DetectLogo) into a local path handleServeLogo can
+// http.ServeFile. For a local folder that's just the joined path; for a
+// folder on a network share the bytes are copied into logosDir under the
+// channel's ID, mirroring how uploaded logos are stored.
+func (s *Server) materializeLogo(m *netfs.Mount, name string, channelID int64) (string, error) {
+	if !m.Remote() {
+		return filepath.Join(m.Folder(), name), nil
+	}
+	src, err := m.Open(name)
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+	if err := os.MkdirAll(s.logosDir, 0o755); err != nil {
+		return "", err
+	}
+	destPath := filepath.Join(s.logosDir, fmt.Sprintf("%d%s", channelID, strings.ToLower(filepath.Ext(name))))
+	dest, err := os.Create(destPath)
+	if err != nil {
+		return "", err
+	}
+	defer dest.Close()
+	if _, err := io.Copy(dest, src); err != nil {
+		os.Remove(destPath)
+		return "", err
+	}
+	return destPath, nil
 }

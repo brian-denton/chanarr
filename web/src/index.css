@@ -237,7 +237,8 @@ a {
   line-height: 1.5;
 }
 
-.step input[type="text"] {
+.step input[type="text"],
+.step input[type="password"] {
   width: 100%;
   padding: 12px 14px;
   border-radius: 8px;
@@ -245,6 +246,28 @@ a {
   background: var(--panel2);
   color: var(--text);
   margin-bottom: 14px;
+}
+
+.step .hint {
+  font-size: 12px;
+  margin-top: -6px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.step .hint code {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.share-credentials {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .cta {

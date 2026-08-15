@@ -21,16 +21,22 @@ import (
 // wrap around itself.
 //
 // Returns "" if startIndex is the epoch's last item (nothing follows it).
-func buildRemainderPlaylist(items []schedule.PlaylistItem, startIndex int) string {
+// Each entry goes through resolve first (netfs: remote item paths become
+// loopback bridge URLs; local paths pass through untouched).
+func buildRemainderPlaylist(items []schedule.PlaylistItem, startIndex int, resolve InputResolver) (string, error) {
 	if startIndex >= len(items)-1 {
-		return ""
+		return "", nil
 	}
 	var b strings.Builder
 	b.WriteString("ffconcat version 1.0\n")
 	for _, item := range items[startIndex+1:] {
-		fmt.Fprintf(&b, "file %s\n", quoteConcatPath(item.Path))
+		input, err := resolve(item.Path)
+		if err != nil {
+			return "", fmt.Errorf("resolve %s: %w", item.Path, err)
+		}
+		fmt.Fprintf(&b, "file %s\n", quoteConcatPath(input))
 	}
-	return b.String()
+	return b.String(), nil
 }
 
 // quoteConcatPath single-quotes a path for the ffconcat file format,

@@ -8,6 +8,15 @@ import (
 	"chanarr/internal/schedule"
 )
 
+func mustPlaylist(t *testing.T, its []schedule.PlaylistItem, startIndex int) string {
+	t.Helper()
+	got, err := buildRemainderPlaylist(its, startIndex, func(p string) (string, error) { return p, nil })
+	if err != nil {
+		t.Fatalf("buildRemainderPlaylist: %v", err)
+	}
+	return got
+}
+
 func items(paths ...string) []schedule.PlaylistItem {
 	out := make([]schedule.PlaylistItem, len(paths))
 	for i, p := range paths {
@@ -18,7 +27,7 @@ func items(paths ...string) []schedule.PlaylistItem {
 
 func TestBuildRemainderPlaylist_ListsEverythingAfterStartIndex(t *testing.T) {
 	its := items("/a.mkv", "/b.mkv", "/c.mkv")
-	got := buildRemainderPlaylist(its, 0)
+	got := mustPlaylist(t, its, 0)
 
 	if strings.Contains(got, "/a.mkv") {
 		t.Errorf("must not include the current item itself (played separately by phase 1), got:\n%s", got)
@@ -32,7 +41,7 @@ func TestBuildRemainderPlaylist_ListsEverythingAfterStartIndex(t *testing.T) {
 
 func TestBuildRemainderPlaylist_NeverWrapsAround(t *testing.T) {
 	its := items("/a.mkv", "/b.mkv", "/c.mkv")
-	got := buildRemainderPlaylist(its, 1) // current = B
+	got := mustPlaylist(t, its, 1) // current = B
 
 	if strings.Contains(got, "/a.mkv") || strings.Contains(got, "/b.mkv") {
 		t.Errorf("must not wrap back to A or repeat B, got:\n%s", got)
@@ -44,14 +53,14 @@ func TestBuildRemainderPlaylist_NeverWrapsAround(t *testing.T) {
 
 func TestBuildRemainderPlaylist_EmptyWhenStartIndexIsLast(t *testing.T) {
 	its := items("/a.mkv", "/b.mkv")
-	got := buildRemainderPlaylist(its, 1) // current = B, the last item
+	got := mustPlaylist(t, its, 1) // current = B, the last item
 	if got != "" {
 		t.Errorf("expected an empty playlist when the current item is last, got:\n%s", got)
 	}
 }
 
 func TestBuildRemainderPlaylist_EscapesSingleQuotes(t *testing.T) {
-	got := buildRemainderPlaylist(items("/a.mkv", "/media/Bob's Show/ep1.mkv"), 0)
+	got := mustPlaylist(t, items("/a.mkv", "/media/Bob's Show/ep1.mkv"), 0)
 	if !strings.Contains(got, `/media/Bob'\''s Show/ep1.mkv`) {
 		t.Errorf("expected escaped single quote, got:\n%s", got)
 	}

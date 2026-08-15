@@ -49,6 +49,15 @@ CREATE TABLE IF NOT EXISTS epoch_items (
 	audio_sample_rate INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (epoch_id, position)
 );
+
+CREATE TABLE IF NOT EXISTS shares (
+	protocol TEXT NOT NULL,
+	host     TEXT NOT NULL,
+	share    TEXT NOT NULL,
+	username TEXT NOT NULL DEFAULT '',
+	password TEXT NOT NULL DEFAULT '',
+	PRIMARY KEY (protocol, host, share)
+);
 `
 
 type sqliteStore struct {
@@ -331,4 +340,30 @@ func (s *sqliteStore) SavePlexConnection(serverURL, token string) error {
 		return err
 	}
 	return s.setSetting(settingPlexToken, token)
+}
+
+func (s *sqliteStore) ShareCredentials(protocol, host, share string) (username, password string, err error) {
+	err = s.db.QueryRow(
+		`SELECT username, password FROM shares WHERE protocol = ? AND host = ? AND share = ?`,
+		protocol, host, share,
+	).Scan(&username, &password)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", nil // no stored login — guest is the correct fallback
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("store: read share credentials %s://%s/%s: %w", protocol, host, share, err)
+	}
+	return username, password, nil
+}
+
+func (s *sqliteStore) SaveShareCredentials(protocol, host, share, username, password string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO shares (protocol, host, share, username, password) VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(protocol, host, share) DO UPDATE SET username = excluded.username, password = excluded.password`,
+		protocol, host, share, username, password,
+	)
+	if err != nil {
+		return fmt.Errorf("store: save share credentials %s://%s/%s: %w", protocol, host, share, err)
+	}
+	return nil
 }

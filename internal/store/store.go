@@ -46,6 +46,14 @@ type Store interface {
 	PlexConnection() (serverURL, token string, connected bool, err error)
 	SavePlexConnection(serverURL, token string) error
 
+	// ShareCredentials returns the stored login for a network share
+	// (internal/netfs), or empty strings with no error when none is
+	// stored — an unauthenticated (guest) attempt is the correct
+	// fallback, not a failure.
+	ShareCredentials(protocol, host, share string) (username, password string, err error)
+	// SaveShareCredentials stores (or replaces) the login for a share.
+	SaveShareCredentials(protocol, host, share, username, password string) error
+
 	Close() error
 }
 

@@ -48,13 +48,20 @@ import (
 )
 
 // EpochProvider resolves a channel by its tuner GuideNumber and returns its
-// current schedule. TODO: implement against internal/store once wired into
-// cmd/chanarr/main.go (mirroring internal/tuner's and internal/guide's
-// provider pattern).
+// current schedule (wired against internal/store in cmd/chanarr/main.go,
+// mirroring internal/tuner's and internal/guide's provider pattern).
 type EpochProvider func(channelNumber string) (schedule.Channel, schedule.Epoch, error)
 
+// InputResolver converts a stored item path into the input string ffmpeg
+// is actually handed — identity for local paths, a loopback bridge URL for
+// items on network shares (netfs.Manager.InputTarget). nil means all-local.
+type InputResolver func(path string) (string, error)
+
 // Handler serves GET /stream/{number}.
-func Handler(provider EpochProvider) http.HandlerFunc {
+func Handler(provider EpochProvider, resolve InputResolver) http.HandlerFunc {
+	if resolve == nil {
+		resolve = func(path string) (string, error) { return path, nil }
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		number := r.PathValue("number")
 		ch, epoch, err := provider(number)
@@ -77,7 +84,7 @@ func Handler(provider EpochProvider) http.HandlerFunc {
 				return
 			}
 
-			runCycle(ctx, w, ch.Number, epoch.Items, airing)
+			runCycle(ctx, w, ch.Number, epoch.Items, airing, resolve)
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -90,7 +97,7 @@ func Handler(provider EpochProvider) http.HandlerFunc {
 // serves filler for whatever remains of airing's declared duration before
 // returning, so the caller's next ProgramAt call correctly lands on the
 // following item rather than re-hitting the same failure instantly.
-func runCycle(ctx context.Context, w io.Writer, channelNumber string, items []schedule.PlaylistItem, airing schedule.Airing) {
+func runCycle(ctx context.Context, w io.Writer, channelNumber string, items []schedule.PlaylistItem, airing schedule.Airing, resolve InputResolver) {
 	startIndex := indexOfPath(items, airing.Item.Path)
 	seek := time.Since(airing.Start)
 	if seek < 0 {
@@ -99,7 +106,13 @@ func runCycle(ctx context.Context, w io.Writer, channelNumber string, items []sc
 	remux := remuxCompatible(items)
 	target := transcodeTarget(items)
 
-	cmd1 := singleItemCmd(ctx, airing.Item.Path, seek, remux, target)
+	input, err := resolve(airing.Item.Path)
+	if err != nil {
+		log.Printf("stream: channel %s: resolve %s: %v", channelNumber, airing.Item.Path, err)
+		serveFiller(ctx, w, channelNumber, time.Until(airing.End))
+		return
+	}
+	cmd1 := singleItemCmd(ctx, input, seek, remux, target)
 	if err := runToWriter(cmd1, w); err != nil && ctx.Err() == nil {
 		log.Printf("stream: channel %s: phase 1 (%s) exited: %v", channelNumber, airing.Item.Path, err)
 		serveFiller(ctx, w, channelNumber, time.Until(airing.End))
@@ -109,7 +122,12 @@ func runCycle(ctx context.Context, w io.Writer, channelNumber string, items []sc
 		return
 	}
 
-	playlist := buildRemainderPlaylist(items, startIndex)
+	playlist, err := buildRemainderPlaylist(items, startIndex, resolve)
+	if err != nil {
+		log.Printf("stream: channel %s: build remainder playlist: %v", channelNumber, err)
+		serveFiller(ctx, w, channelNumber, time.Until(airing.End))
+		return
+	}
 	if playlist == "" {
 		return // startIndex was the epoch's last item — nothing more this cycle.
 	}

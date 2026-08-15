@@ -8,6 +8,16 @@ Full spec: [.scratch/chanarr-spec/spec.md](.scratch/chanarr-spec/spec.md). Domai
 
 v1 complete: backend and frontend both implemented and wired together, verified end to end (create a channel through the UI, it streams real video to a tuner client).
 
+## Media locations
+
+A channel's folder can be a local path or a network share — no OS-level mount required:
+
+- Local: `/media/tv/My Show`
+- SMB/CIFS: `smb://nas/media/My Show` (optional username/password in the wizard; blank = guest)
+- NFS v3: `nfs://nas/volume1/media/My Show` (access is governed by the server's export rules — no password)
+
+ffmpeg/ffprobe can't read SMB/NFS directly, so chanarr streams remote files to them through a loopback HTTP bridge with byte-range support (`internal/netfs`). SMB logins are stored keyed by host+share and reused for rescans and streaming.
+
 ## Requirements
 
 - Go 1.26+
@@ -23,6 +33,7 @@ internal/tuner/    HDHomeRun emulation (discover/lineup/lineup_status/device.xml
 internal/guide/    XMLTV guide generation + Plex reloadGuide push
 internal/stream/   per-channel MPEG-TS streaming (ffmpeg)
 internal/library/  folder scanning, SxxExx metadata parsing
+internal/netfs/    local/SMB/NFS folder access + loopback HTTP bridge for ffmpeg
 internal/store/    SQLite persistence
 internal/plexlink/ optional PIN-link Plex connection (docs/adr/0002)
 internal/httpapi/  REST API for the web UI

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"chanarr/internal/netfs"
 	"chanarr/internal/store"
 )
 
@@ -20,7 +21,7 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
-	return NewServer(st, filepath.Join(t.TempDir(), "logos"))
+	return NewServer(st, filepath.Join(t.TempDir(), "logos"), netfs.NewManager(nil))
 }
 
 // mustWriteFile creates a file (and its parent dirs) with the given

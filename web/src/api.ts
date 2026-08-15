@@ -32,10 +32,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  scan: (folder: string) =>
+  scan: (folder: string, credentials?: { username: string; password: string }) =>
     request<ScanResult>("/scan", {
       method: "POST",
-      body: JSON.stringify({ folder }),
+      body: JSON.stringify({ folder, ...credentials }),
     }),
 
   listChannels: () => request<Channel[]>("/channels"),

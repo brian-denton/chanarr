@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	"chanarr/internal/netfs"
 	"chanarr/internal/schedule"
 )
 
@@ -42,40 +42,49 @@ func isMediaFile(name string) bool {
 	return mediaExtensions[strings.ToLower(filepath.Ext(name))]
 }
 
-// Scan walks a channel's folder recursively and returns its playlist items
-// — path plus ffprobed duration, cached here and never re-probed after
-// this (spec.md §2: durations are fixed at epoch-creation time). Items are
-// returned in lexical path order, matching the decided in-order sort rule.
+// Scan walks a channel's mounted folder recursively and returns its
+// playlist items — path plus ffprobed duration, cached here and never
+// re-probed after this (spec.md §2: durations are fixed at epoch-creation
+// time). Items are returned in lexical path order, matching the decided
+// in-order sort rule. The mount abstracts where the folder lives (local
+// disk, SMB, NFS — internal/netfs); item paths are stored in the mount's
+// spec form, and probing reads remote files through the netfs bridge.
 //
 // A file that fails to probe (corrupt, mid-copy, unreadable) is logged and
 // skipped rather than failing the whole scan — one bad file in a library
 // shouldn't take out the rest of the channel. Scan only returns an error
 // for a folder-level problem (missing/unreadable folder).
-func Scan(folder string) ([]schedule.PlaylistItem, error) {
-	var paths []string
-	err := filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
+func Scan(m *netfs.Mount) ([]schedule.PlaylistItem, error) {
+	var rels []string
+	err := fs.WalkDir(m.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() || !isMediaFile(d.Name()) {
 			return nil
 		}
-		paths = append(paths, path)
+		rels = append(rels, rel)
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("library: scan %s: %w", folder, err)
+		return nil, fmt.Errorf("library: scan %s: %w", m.Folder(), err)
 	}
-	sort.Strings(paths)
+	sort.Strings(rels)
 
-	items := make([]schedule.PlaylistItem, 0, len(paths))
-	for _, path := range paths {
-		duration, params, err := probeFile(path)
+	items := make([]schedule.PlaylistItem, 0, len(rels))
+	for _, rel := range rels {
+		spec := m.Spec(rel)
+		input, err := m.InputTarget(rel)
 		if err != nil {
-			log.Printf("library: skipping %s: %v", path, err)
+			log.Printf("library: skipping %s: %v", spec, err)
 			continue
 		}
-		items = append(items, schedule.PlaylistItem{Path: path, Duration: duration, Params: params})
+		duration, params, err := probeFile(input)
+		if err != nil {
+			log.Printf("library: skipping %s: %v", spec, err)
+			continue
+		}
+		items = append(items, schedule.PlaylistItem{Path: spec, Duration: duration, Params: params})
 	}
 	return items, nil
 }
@@ -89,11 +98,14 @@ var logoCandidates = []string{
 	"folder.jpg", "folder.jpeg", "folder.png",
 }
 
-// DetectLogo looks for a conventional logo/poster file directly in folder.
-// ok=false means none was found — the caller (internal/httpapi) falls back
-// to no logo unless the user uploads one.
-func DetectLogo(folder string) (path string, ok bool) {
-	entries, err := os.ReadDir(folder)
+// DetectLogo looks for a conventional logo/poster file directly in the
+// mounted folder's root. It returns the file's name within the folder
+// (not a full path — for a remote mount there is no local path; the
+// caller copies the bytes out via m.Open if it needs a local file).
+// ok=false means none was found — the caller (internal/httpapi) falls
+// back to no logo unless the user uploads one.
+func DetectLogo(m *netfs.Mount) (name string, ok bool) {
+	entries, err := fs.ReadDir(m.FS(), ".")
 	if err != nil {
 		return "", false
 	}
@@ -105,7 +117,7 @@ func DetectLogo(folder string) (path string, ok bool) {
 	}
 	for _, candidate := range logoCandidates {
 		if actual, found := names[candidate]; found {
-			return filepath.Join(folder, actual), true
+			return actual, true
 		}
 	}
 	return "", false

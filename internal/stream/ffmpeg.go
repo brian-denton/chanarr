@@ -62,6 +62,11 @@ func singleItemCmd(ctx context.Context, path string, seek time.Duration, remux b
 func remainderCmd(ctx context.Context, playlistPath string, tsOffset time.Duration, remux bool, target schedule.StreamParams) *exec.Cmd {
 	args := []string{
 		"-hide_banner", "-loglevel", "error", "-re",
+		// Playlist entries may be loopback http URLs (netfs bridge, for
+		// items on SMB/NFS shares); a concat input's nested opens are
+		// restricted to file-ish protocols by default, so http/tcp must
+		// be whitelisted explicitly. Harmless for all-local playlists.
+		"-protocol_whitelist", "file,http,https,tcp,tls,crypto,data",
 		"-f", "concat", "-safe", "0", "-i", playlistPath,
 	}
 	args = append(args, codecArgs(remux, target)...)

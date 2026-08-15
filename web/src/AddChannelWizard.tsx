@@ -10,6 +10,8 @@ export function AddChannelWizard({
   onCancel: () => void;
 }) {
   const [folder, setFolder] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [scanning, setScanning] = useState(false);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [name, setName] = useState("");
@@ -17,12 +19,21 @@ export function AddChannelWizard({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
+  // Network shares (smb:// or nfs://) can take an optional login. SMB uses
+  // both fields; NFS has no password auth (its access comes from the
+  // server's export rules) so only the hint copy differs.
+  const trimmed = folder.trim();
+  const isSMB = trimmed.startsWith("smb://");
+  const isNFS = trimmed.startsWith("nfs://");
+
   async function handleScan() {
-    if (!folder.trim()) return;
+    if (!trimmed) return;
     setError("");
     setScanning(true);
     try {
-      const result = await api.scan(folder.trim());
+      const credentials =
+        isSMB && (username || password) ? { username, password } : undefined;
+      const result = await api.scan(trimmed, credentials);
       setScan(result);
       setName(result.name);
       setNumber(result.number);
@@ -70,7 +81,37 @@ export function AddChannelWizard({
           onChange={(e) => setFolder(e.target.value)}
           disabled={scanning}
         />
-        <button className="cta" onClick={handleScan} disabled={!folder.trim() || scanning}>
+        <p className="hint">
+          Local path, or a network share:{" "}
+          <code>smb://nas/media/My Show</code> or <code>nfs://nas/volume1/My Show</code>.
+        </p>
+        {isSMB && (
+          <div className="share-credentials">
+            <input
+              type="text"
+              placeholder="Username (optional — blank for guest)"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={scanning}
+              autoComplete="off"
+            />
+            <input
+              type="password"
+              placeholder="Password (optional)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={scanning}
+              autoComplete="off"
+            />
+          </div>
+        )}
+        {isNFS && (
+          <p className="hint">
+            NFS access is granted by the server&rsquo;s export rules — no username or
+            password needed here.
+          </p>
+        )}
+        <button className="cta" onClick={handleScan} disabled={!trimmed || scanning}>
           {scanning ? "Scanning…" : "Scan folder"}
         </button>
         <button className="ghost" onClick={onCancel}>
