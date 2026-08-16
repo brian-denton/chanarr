@@ -53,25 +53,22 @@ Override with `CHANARR_DATA_DIR` (throwaway dev runs, Docker volumes, multiple i
 
 ## Deploy to Proxmox
 
-Two steps — build the Linux binary here, run the installer on the Proxmox host:
+One command on the Proxmox host, [community-scripts](https://community-scripts.org/) style:
 
 ```bash
-./deploy/build-release.sh
-scp dist/chanarr-linux-amd64 deploy/proxmox-install.sh root@proxmox:
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/brian-denton/chanarr/main/ct/chanarr.sh)"
 ```
 
-Then on the host, as root:
+A dialog offers default settings (unprivileged Debian 12 LXC, 2 cores / 1GB / 4GB, DHCP on vmbr0) or advanced ones (CTID, hostname, sizing, bridge, static IP, storage). It downloads the Debian template if needed, installs ffmpeg, fetches the latest chanarr release binary, and runs it as a systemd service (`chanarr.service`, data in `/var/lib/chanarr`, starts on boot), then prints the URL.
+
+**Updating:** run the same one-liner *inside* the container — it detects an existing install and swaps in the latest release.
+
+NAS media needs no mounts — point channels at `smb://`/`nfs://` folders; chanarr's share clients are pure userspace, which is why an unprivileged container is enough. Media on the Proxmox host itself can be bind-mounted: `pct set <ctid> -mp0 /path/on/host,mp=/media,ro=1`.
+
+**Publishing a release** (what the installer downloads):
 
 ```bash
-./proxmox-install.sh
-```
-
-It creates an unprivileged Debian 12 LXC (downloading the template if needed), installs ffmpeg, and runs chanarr as a systemd service (`chanarr.service`, data in `/var/lib/chanarr`, starts on boot). It prints the container's URL when done. NAS media needs no mounts — use `smb://`/`nfs://` folders; chanarr's share clients are userspace, which is why an unprivileged container is enough. Tunables (CTID, storage, bridge, static IP, sizing) are env vars documented at the top of the script.
-
-To ship a new build into an existing container:
-
-```bash
-./proxmox-install.sh update <ctid>
+./deploy/release.sh v0.1.0
 ```
 
 ## Develop
