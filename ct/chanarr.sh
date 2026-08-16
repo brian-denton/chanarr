@@ -167,7 +167,7 @@ msg_info "Installing ${APP} (this installs ffmpeg — takes a minute)"
 # no-op reported as success.
 pct exec "$CTID" -- bash -c "
 	set -e
-	export DEBIAN_FRONTEND=noninteractive
+	export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
 	apt-get update -qq
 	apt-get install -y -qq --no-install-recommends curl ca-certificates >/dev/null
 	curl -fsSL '$RAW/install/chanarr-install.sh' -o /tmp/chanarr-install.sh

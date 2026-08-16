@@ -6,7 +6,7 @@
 # CHANARR_BINARY_URL overrides where the binary comes from (used by tests
 # and pre-release verification).
 set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
 
 REPO="brian-denton/chanarr"
 BINARY_URL="${CHANARR_BINARY_URL:-https://github.com/${REPO}/releases/latest/download/chanarr-linux-amd64}"
