@@ -51,6 +51,29 @@ Everything persistent (channels, Plex connection, share logins, uploaded logos) 
 
 Override with `CHANARR_DATA_DIR` (throwaway dev runs, Docker volumes, multiple instances); `CHANARR_ADDR` overrides the listen address (default `:5004`). A `chanarr.db` left in the launch directory by older builds is copied into the data dir on first run.
 
+## Deploy to Proxmox
+
+Two steps — build the Linux binary here, run the installer on the Proxmox host:
+
+```bash
+./deploy/build-release.sh
+scp dist/chanarr-linux-amd64 deploy/proxmox-install.sh root@proxmox:
+```
+
+Then on the host, as root:
+
+```bash
+./proxmox-install.sh
+```
+
+It creates an unprivileged Debian 12 LXC (downloading the template if needed), installs ffmpeg, and runs chanarr as a systemd service (`chanarr.service`, data in `/var/lib/chanarr`, starts on boot). It prints the container's URL when done. NAS media needs no mounts — use `smb://`/`nfs://` folders; chanarr's share clients are userspace, which is why an unprivileged container is enough. Tunables (CTID, storage, bridge, static IP, sizing) are env vars documented at the top of the script.
+
+To ship a new build into an existing container:
+
+```bash
+./proxmox-install.sh update <ctid>
+```
+
 ## Develop
 
 Two dev servers, run separately — Vite proxies `/api` to the Go server (`web/vite.config.ts`):

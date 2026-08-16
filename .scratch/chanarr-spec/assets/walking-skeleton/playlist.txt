@@ -1,3 +1,0 @@
-ffconcat version 1.0
-file ep1.ts
-file ep2.ts

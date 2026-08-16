@@ -3,6 +3,9 @@
 /chanarr-proto
 *.test
 
+# Release builds (deploy/build-release.sh)
+/dist/
+
 # SQLite
 *.db
 *.db-journal
@@ -17,9 +20,3 @@ internal/webui/dist/
 
 # Misc
 .DS_Store
-
-# Walking-skeleton prototype: generated test clips, compiled binary, run log
-# (regenerate via .scratch/chanarr-spec/assets/walking-skeleton/README.md)
-.scratch/chanarr-spec/assets/walking-skeleton/*.ts
-.scratch/chanarr-spec/assets/walking-skeleton/chanarr-proto
-.scratch/chanarr-spec/assets/walking-skeleton/server.log
