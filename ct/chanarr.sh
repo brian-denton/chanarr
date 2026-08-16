@@ -160,7 +160,20 @@ pct exec "$CTID" -- ping -c1 -W1 deb.debian.org >/dev/null 2>&1 || fail "contain
 msg_ok "Network is up"
 
 msg_info "Installing ${APP} (this installs ffmpeg — takes a minute)"
-pct exec "$CTID" -- bash -c "bash <(curl -fsSL $RAW/install/chanarr-install.sh)" >"$LOG" 2>&1 || fail "install script failed"
+# The debian-12-standard template ships without curl, so bootstrap it
+# first; and fetch the install script to a file rather than process
+# substitution — `bash <(curl ...)` runs an empty script (exit 0!) when
+# the download fails, which once turned a failed install into a silent
+# no-op reported as success.
+pct exec "$CTID" -- bash -c "
+	set -e
+	export DEBIAN_FRONTEND=noninteractive
+	apt-get update -qq
+	apt-get install -y -qq --no-install-recommends curl ca-certificates >/dev/null
+	curl -fsSL '$RAW/install/chanarr-install.sh' -o /tmp/chanarr-install.sh
+	bash /tmp/chanarr-install.sh
+" >"$LOG" 2>&1 || fail "install script failed"
+pct exec "$CTID" -- systemctl is-active --quiet chanarr || fail "chanarr service is not running after install"
 msg_ok "Installed ${APP}"
 
 pct set "$CTID" --description "# chanarr
